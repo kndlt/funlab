@@ -17,6 +17,7 @@
   .filters button{background:#1a1510;border:1px solid var(--line);color:var(--muted);border-radius:20px;padding:6px 13px;cursor:pointer;font-size:12.5px;font-family:inherit}
   .filters button:hover{color:var(--cream);border-color:#7a5a30}
   .filters button.on{background:var(--amber);color:#241400;border-color:var(--amber);font-weight:700}
+  .filters .cnt{opacity:.5;font-size:11px;font-weight:600}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:13px;margin-top:18px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px 17px;display:flex;flex-direction:column;gap:7px}
   .card .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
@@ -259,11 +260,14 @@ function commText(c){return (c&&c.n)?`⭐ <b>${c.avg}</b> · ${c.n}명 평가`:'
 function netFail(msg){
   document.getElementById('net').textContent=msg||'⚠ DB 연결 안 됨 — 점수·메모는 이 브라우저(localStorage)에만 저장됨.';}
 
+const catCount={};GAMES.forEach(g=>catCount[g.cat]=(catCount[g.cat]||0)+1);
 const cats=['전체',...[...new Set(GAMES.map(g=>g.cat))]];
 cats.forEach(c=>{
-  const b=document.createElement('button');b.textContent=c;
+  const b=document.createElement('button');
+  b.innerHTML=`${c} <span class="cnt">${c==='전체'?GAMES.length:catCount[c]}</span>`;
+  b.dataset.cat=c;
   if(c===filter)b.classList.add('on');
-  b.onclick=()=>{filter=c;[...filtersEl.children].forEach(x=>x.classList.toggle('on',x.textContent===c));render()};
+  b.onclick=()=>{filter=c;[...filtersEl.children].forEach(x=>x.classList.toggle('on',x.dataset.cat===c));render()};
   filtersEl.appendChild(b);
 });
 
