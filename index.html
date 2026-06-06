@@ -36,6 +36,10 @@
   .nums button:hover{border-color:#7a5a30}
   .nums button.on{background:var(--amber);color:#241400;border-color:var(--amber)}
   .note{width:100%;margin-top:6px;background:#11100a;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-family:inherit;font-size:12px;padding:6px 9px;resize:vertical;min-height:32px}
+  .comm{font-size:11px;color:var(--green);margin-bottom:6px}
+  .comm b{color:var(--cream)}
+  .comm.empty{color:var(--muted)}
+  #net{color:#e0915a;font-size:12px;margin-top:6px}
   footer{margin-top:46px;color:#7c6d58;font-size:12px;border-top:1px solid var(--line);padding-top:18px}
 </style>
 </head>
@@ -46,7 +50,7 @@
   <div class="summary" id="summary"></div>
   <div class="filters" id="filters"></div>
   <div class="grid" id="grid"></div>
-  <footer>점수는 이 브라우저에 저장돼(localStorage). · 계속 자라는 catalog — 배치마다 nerve를 넓힘.</footer>
+  <footer>점수와 메모는 funlab DB에 저장돼 — 다 같이 본다 (오프라인이면 이 브라우저에만). · 계속 자라는 catalog — 배치마다 nerve를 넓힘.<div id="net"></div></footer>
 </div>
 
 <script>
@@ -98,6 +102,57 @@ const filtersEl=document.getElementById('filters');
 function k(s,t){return 'funlab:'+s+':'+t}
 let filter='전체';
 
+// ── Supabase (Data API / PostgREST) — browser writes directly, RLS is the gate.
+// publishable key is safe to ship; the gate is RLS, not key secrecy.
+const SB_URL='https://idgglxgnviovwrwlmgjr.supabase.co';
+const SB_KEY='sb_publishable_6Kxa6qylzE_naz-4oAUivQ_yTYFGDJX';
+const REST=SB_URL+'/rest/v1';
+
+// one stable anonymous voter id per browser (the upsert key, with game_slug)
+function voterId(){
+  let v=localStorage.getItem('funlab:voter_id');
+  if(!v){v=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'v'+Date.now()+Math.random().toString(36).slice(2);
+    localStorage.setItem('funlab:voter_id',v);}
+  return v;
+}
+const VOTER=voterId();
+
+function sb(path,opts){
+  opts=opts||{};
+  return fetch(REST+path,Object.assign({},opts,{headers:Object.assign(
+    {apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},opts.headers||{})}));
+}
+let COMM={};   // game_slug -> {n, avg} community aggregate (everyone)
+let MINE={};   // game_slug -> {score, note} this voter's own row
+let netDown=false;
+
+async function loadCommunity(){
+  try{const r=await sb('/funlab_rating_summary?select=game_slug,n,avg_score');if(!r.ok)throw 0;
+    const m={};(await r.json()).forEach(x=>m[x.game_slug]={n:x.n,avg:x.avg_score});return m;
+  }catch(e){return null;}
+}
+async function loadMine(){
+  try{const r=await sb('/funlab_ratings?voter_id=eq.'+encodeURIComponent(VOTER)+'&select=game_slug,score,note');if(!r.ok)throw 0;
+    const m={};(await r.json()).forEach(x=>m[x.game_slug]={score:x.score,note:x.note});return m;
+  }catch(e){return null;}
+}
+async function upsert(slug,fields){ // server insert policy requires a score; caller guarantees it
+  const r=await sb('/funlab_ratings?on_conflict=game_slug,voter_id',{method:'POST',
+    headers:{Prefer:'resolution=merge-duplicates,return=minimal'},
+    body:JSON.stringify([Object.assign({game_slug:slug,voter_id:VOTER},fields)])});
+  if(!r.ok)throw new Error('upsert '+r.status+' '+await r.text());
+}
+async function refreshComm(slug,card){
+  try{const r=await sb('/funlab_rating_summary?game_slug=eq.'+encodeURIComponent(slug)+'&select=n,avg_score');if(!r.ok)return;
+    const c=(await r.json())[0];if(c){COMM[slug]={n:c.n,avg:c.avg_score};
+      const el=card.querySelector('.comm');if(el){el.innerHTML=commText(COMM[slug]);el.classList.toggle('empty',!COMM[slug].n);}}
+    summary();
+  }catch(e){}
+}
+function commText(c){return (c&&c.n)?`⭐ <b>${c.avg}</b> · ${c.n}명 평가`:'아직 평가 없음 — 첫 평가 남겨봐';}
+function netFail(){if(netDown)return;netDown=true;
+  document.getElementById('net').textContent='⚠ DB 연결 안 됨 — 점수·메모는 이 브라우저(localStorage)에만 저장됨.';}
+
 const cats=['전체',...[...new Set(GAMES.map(g=>g.cat))]];
 cats.forEach(c=>{
   const b=document.createElement('button');b.textContent=c;
@@ -111,7 +166,10 @@ function render(){
   GAMES.filter(g=>filter==='전체'||g.cat===filter).forEach(g=>{
     const card=document.createElement('div');
     card.className='card'+(g.hero?' hero':'');
-    const saved=localStorage.getItem(k(g.slug,'score'));
+    const mine=MINE[g.slug]||{};
+    const saved=(mine.score!=null)?mine.score:localStorage.getItem(k(g.slug,'score'));
+    const note=(mine.note!=null)?mine.note:(localStorage.getItem(k(g.slug,'note'))||'');
+    const c=COMM[g.slug];
     let nums='';
     for(let i=1;i<=10;i++) nums+=`<button data-n="${i}" class="${saved==i?'on':''}">${i}</button>`;
     card.innerHTML=`
@@ -120,28 +178,47 @@ function render(){
       <div class="nerve">${g.nerve}</div>
       <a class="play" href="games/${g.slug}/" target="_blank">▶ 플레이</a>
       <div class="score">
+        <div class="comm${c&&c.n?'':' empty'}">${commText(c)}</div>
         <div class="lbl">재밌었나? (1 = 노잼, 10 = 이건 진짜)</div>
         <div class="nums">${nums}</div>
-        <textarea class="note" placeholder="💭 한 줄 메모…">${localStorage.getItem(k(g.slug,'note'))||''}</textarea>
+        <textarea class="note" placeholder="💭 한 줄 메모…">${note.replace(/</g,'&lt;')}</textarea>
       </div>`;
-    card.querySelectorAll('.nums button').forEach(b=>b.onclick=()=>{
-      localStorage.setItem(k(g.slug,'score'),b.dataset.n);
-      card.querySelectorAll('.nums button').forEach(x=>x.classList.remove('on'));
-      b.classList.add('on'); summary();
+    card.querySelectorAll('.nums button').forEach(b=>b.onclick=async()=>{
+      const n=+b.dataset.n;
+      localStorage.setItem(k(g.slug,'score'),n);
+      card.querySelectorAll('.nums button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+      MINE[g.slug]=Object.assign({},MINE[g.slug],{score:n});
+      const noteVal=card.querySelector('.note').value;
+      try{await upsert(g.slug,{score:n,note:noteVal||null});await refreshComm(g.slug,card);}
+      catch(e){netFail();}
     });
-    card.querySelector('.note').onblur=e=>localStorage.setItem(k(g.slug,'note'),e.target.value);
+    card.querySelector('.note').onblur=async e=>{
+      const noteVal=e.target.value;
+      localStorage.setItem(k(g.slug,'note'),noteVal);
+      const sc=MINE[g.slug]&&MINE[g.slug].score;
+      if(sc==null)return; // server needs a score first; keep note in localStorage until then
+      MINE[g.slug].note=noteVal;
+      try{await upsert(g.slug,{score:sc,note:noteVal||null});}catch(e){netFail();}
+    };
     grid.appendChild(card);
   });
 }
 function summary(){
-  const rows=GAMES.map(g=>({g,s:+localStorage.getItem(k(g.slug,'score'))})).filter(r=>r.s);
   const s=document.getElementById('summary');
-  if(!rows.length){s.textContent=`${GAMES.length}개 프로토타입 · 아직 score 0개 — 하나씩 플레이하고 점수 매겨봐.`;return}
-  const avg=(rows.reduce((a,b)=>a+b.s,0)/rows.length).toFixed(1);
-  const top=rows.filter(r=>r.s>=8).sort((a,b)=>b.s-a.s).map(r=>`${r.g.title}(${r.s})`).join(' · ');
-  s.innerHTML=`scored <b>${rows.length}/${GAMES.length}</b> · 평균 <b>${avg}</b>${top?` · 🔥 top: ${top}`:''}`;
+  const rows=GAMES.map(g=>({g,c:COMM[g.slug]})).filter(r=>r.c&&r.c.n);
+  if(!rows.length){s.textContent=`${GAMES.length}개 프로토타입 · 아직 평가 0개 — 플레이하고 점수를 남겨봐.`;return}
+  const votes=rows.reduce((a,r)=>a+r.c.n,0);
+  const top=rows.filter(r=>r.c.avg>=8).sort((a,b)=>b.c.avg-a.c.avg).map(r=>`${r.g.title}(${r.c.avg})`).join(' · ');
+  s.innerHTML=`평가된 게임 <b>${rows.length}/${GAMES.length}</b> · 총 <b>${votes}</b>표${top?` · 🔥 top: ${top}`:''}`;
 }
-render();summary();
+
+render();summary();                         // instant paint from localStorage
+(async()=>{                                 // then enrich with community + server-side mine
+  const [c,m]=await Promise.all([loadCommunity(),loadMine()]);
+  if(c)COMM=c; if(m)MINE=m;
+  if(c===null&&m===null)netFail();
+  render();summary();
+})();
 </script>
 </body>
 </html>
