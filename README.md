@@ -22,7 +22,7 @@ open index.html        # macOS
 # or serve the folder with any static server, or host on GitHub Pages
 ```
 
-Open `index.html`, click into each mini-game (opens in a new tab), play it, come back, and rate it **1–10** with a one-line note. Scores are saved to a shared Supabase table (keyed by game `slug` + an anonymous per-browser voter id), so everyone's play-test scores aggregate together — each card shows the community average. If the DB is unreachable it falls back to `localStorage`.
+Open `index.html`, click into each mini-game, play it, hit the browser **back** button (or the in-page back link) to return, and rate it **1–10** with a one-line note. Scores are saved to a shared Supabase table (keyed by game `slug` + an anonymous per-browser voter id), so everyone's play-test scores aggregate together — each card shows the community average. If the DB is unreachable it falls back to `localStorage`.
 
 ## Structure
 

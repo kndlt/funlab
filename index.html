@@ -176,7 +176,7 @@ function render(){
       <div class="top"><h3>${g.title}</h3><span class="ref">${g.ref}</span></div>
       <div class="essence">${g.essence.replace(/\*(.+?)\*/g,'<b>$1</b>')}</div>
       <div class="nerve">${g.nerve}</div>
-      <a class="play" href="games/${g.slug}/" target="_blank">▶ 플레이</a>
+      <a class="play" href="games/${g.slug}/">▶ 플레이</a>
       <div class="score">
         <div class="comm${c&&c.n?'':' empty'}">${commText(c)}</div>
         <div class="lbl">재밌었나? (1 = 노잼, 10 = 이건 진짜)</div>
