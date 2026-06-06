@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>행맨 · Hangman</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --good:#7fbf6a; --bad:#e0764a;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;padding:18px 16px 20px;overflow:hidden}
+
+  .gallowsWrap{display:flex;justify-content:center;margin-bottom:6px}
+  canvas#gallows{display:block;width:200px;height:200px}
+
+  .category{text-align:center;font-size:12px;color:var(--muted);letter-spacing:.5px;margin-bottom:10px;min-height:16px}
+  .category b{color:var(--amber);font-weight:700}
+
+  .word{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:16px;min-height:46px}
+  .slot{width:26px;height:40px;display:flex;align-items:flex-end;justify-content:center;
+    font-size:26px;font-weight:800;color:var(--cream);
+    border-bottom:3px solid var(--line);line-height:1;padding-bottom:2px;font-variant-numeric:tabular-nums}
+  .slot.filled{border-bottom-color:var(--amber)}
+  .slot.space{border-bottom-color:transparent;width:14px}
+  .slot.miss{color:var(--bad);border-bottom-color:var(--bad)}
+  @keyframes pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+  .slot.filled span{display:inline-block;animation:pop .18s ease}
+
+  .lives{text-align:center;font-size:13px;color:var(--muted);margin-bottom:14px;letter-spacing:2px}
+  .lives .heart{color:var(--bad)}
+  .lives .gone{color:#4a3f30}
+
+  .keyboard{display:flex;flex-direction:column;gap:6px;align-items:center}
+  .krow{display:flex;gap:6px;justify-content:center}
+  .key{flex:1 1 0;min-width:0;height:42px;max-width:38px;
+    background:#241c12;border:1px solid var(--line);border-radius:8px;
+    color:var(--ink);font-family:inherit;font-size:15px;font-weight:700;
+    cursor:pointer;transition:transform .05s,background .12s,color .12s}
+  .key:active{transform:scale(.92)}
+  .key:disabled{cursor:default}
+  .key.hit{background:rgba(127,191,106,.18);border-color:var(--good);color:var(--good)}
+  .key.miss{background:rgba(224,118,74,.16);border-color:var(--bad);color:#b06348;opacity:.7}
+
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.9);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:300px;line-height:1.6}
+  .overlay .small b{color:var(--cream);font-weight:800;letter-spacing:1px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">행맨<span class="ref">글자를 추리해 단어를 맞힌다 · Hangman</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">연승</div><div class="val" id="streak">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">키보드 A–Z 또는 아래 자판</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <div class="gallowsWrap"><canvas id="gallows" width="400" height="400"></canvas></div>
+    <div class="category" id="category"></div>
+    <div class="word" id="word"></div>
+    <div class="lives" id="lives"></div>
+    <div class="keyboard" id="keyboard"></div>
+
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">틀릴 때마다 교수대가 한 줄씩 그려진다. 여섯 번 틀리면 끝. 맞히면 연승.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const BEST_KEY = "funlab:hangman:best";
+  const MAX_WRONG = 6;
+
+  // word : English secret, hint : Korean category/clue
+  const WORDS = [
+    ["APPLE","과일"],["TIGER","동물"],["RIVER","자연"],["MUSIC","예술"],
+    ["BREAD","음식"],["CLOUD","날씨"],["HORSE","동물"],["LEMON","과일"],
+    ["PIANO","악기"],["OCEAN","자연"],["EAGLE","동물"],["GRAPE","과일"],
+    ["HONEY","음식"],["SNAKE","동물"],["STORM","날씨"],["BEACH","자연"],
+    ["LIGHT","개념"],["PLANT","자연"],["MONEY","개념"],["CHAIR","사물"],
+    ["TABLE","사물"],["PHONE","사물"],["HOUSE","건물"],["TRAIN","교통"],
+    ["PLANE","교통"],["GHOST","개념"],["DANCE","예술"],["SUGAR","음식"],
+    ["WATER","자연"],["EARTH","자연"],["FIELD","자연"],["FROST","날씨"],
+    ["JUICE","음식"],["KNIFE","사물"],["MANGO","과일"],["NIGHT","시간"],
+    ["OLIVE","음식"],["PEACH","과일"],["QUEEN","사람"],["ROBOT","사물"],
+    ["SHARK","동물"],["TOAST","음식"],["WHALE","동물"],["ZEBRA","동물"],
+    ["BERRY","과일"],["CANDY","음식"],["DREAM","개념"],["FLAME","자연"],
+    ["GLASS","사물"],["HEART","신체"],["IGLOO","건물"],["JELLY","음식"],
+    ["KOALA","동물"],["LASER","사물"],["MOUSE","동물"],["NURSE","직업"],
+    ["ONION","음식"],["PILOT","직업"],["RADIO","사물"],["SPOON","사물"],
+    ["TOWER","건물"],["VOICE","신체"],["WAGON","교통"],["YACHT","교통"],
+    ["BAKER","직업"],["CLOWN","사람"],["DIARY","사물"],["ENGINE","기계"],
+    ["FOREST","자연"],["GARDEN","자연"],["GUITAR","악기"],["HAMMER","공구"],
+    ["ISLAND","자연"],["JACKET","의류"],["KETTLE","사물"],["LADDER","공구"],
+    ["MARKET","장소"],["NEEDLE","사물"],["ORANGE","과일"],["PENCIL","사물"],
+    ["PUZZLE","놀이"],["ROCKET","교통"],["SUNSET","자연"],["TUNNEL","건물"],
+    ["VIOLIN","악기"],["WALNUT","음식"],["WINDOW","사물"],["YELLOW","색"],
+    ["BUTTER","음식"],["CASTLE","건물"],["DESERT","자연"],["FLOWER","자연"],
+    ["JUNGLE","자연"],["MONKEY","동물"],["PEPPER","음식"],["RABBIT","동물"],
+    ["SILVER","색"],["TURTLE","동물"],["WINTER","계절"],["BRIDGE","건물"],
+    ["CAMERA","사물"],["DOCTOR","직업"],["FINGER","신체"],["HELMET","의류"]
+  ];
+
+  const streakEl = document.getElementById("streak");
+  const bestEl   = document.getElementById("best");
+  const catEl    = document.getElementById("category");
+  const wordEl   = document.getElementById("word");
+  const livesEl  = document.getElementById("lives");
+  const kbEl     = document.getElementById("keyboard");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+  const cv       = document.getElementById("gallows");
+  const ctx      = cv.getContext("2d");
+
+  let best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+  let streak = 0;
+
+  let secret;     // current word string
+  let hint;       // category string
+  let guessed;    // Set of guessed letters
+  let wrong;      // count of wrong guesses
+  let state;      // 'playing' | 'won' | 'lost'
+
+  const ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+  // --- keyboard build (QWERTY layout) -----------------------------------
+  const KB_ROWS = ["QWERTYUIOP","ASDFGHJKL","ZXCVBNM"];
+  const keyEls = {};
+  function buildKeyboard(){
+    kbEl.innerHTML = "";
+    for(const row of KB_ROWS){
+      const r = document.createElement("div");
+      r.className = "krow";
+      for(const ch of row){
+        const b = document.createElement("button");
+        b.className = "key";
+        b.textContent = ch;
+        b.addEventListener("click", ()=> guess(ch));
+        keyEls[ch] = b;
+        r.appendChild(b);
+      }
+      kbEl.appendChild(r);
+    }
+  }
+
+  function newRound(){
+    const pick = WORDS[(Math.random()*WORDS.length)|0];
+    secret = pick[0];
+    hint = pick[1];
+    guessed = new Set();
+    wrong = 0;
+    state = "playing";
+    overlay.classList.remove("show");
+    catEl.innerHTML = `분류 · <b>${hint}</b>`;
+    for(const ch of ALPHA){
+      const b = keyEls[ch];
+      if(b){ b.disabled = false; b.className = "key"; }
+    }
+    renderWord();
+    renderLives();
+    drawGallows();
+    updateScores();
+  }
+
+  function updateScores(){
+    streakEl.textContent = streak;
+    bestEl.textContent = best;
+  }
+
+  function renderWord(){
+    wordEl.innerHTML = "";
+    for(const ch of secret){
+      const s = document.createElement("div");
+      if(ch === " "){
+        s.className = "slot space";
+      } else if(guessed.has(ch)){
+        s.className = "slot filled";
+        s.innerHTML = `<span>${ch}</span>`;
+      } else {
+        s.className = "slot";
+      }
+      wordEl.appendChild(s);
+    }
+  }
+
+  // on loss, reveal missing letters in red
+  function revealWord(){
+    wordEl.innerHTML = "";
+    for(const ch of secret){
+      const s = document.createElement("div");
+      if(ch === " "){
+        s.className = "slot space";
+      } else if(guessed.has(ch)){
+        s.className = "slot filled";
+        s.innerHTML = `<span>${ch}</span>`;
+      } else {
+        s.className = "slot miss";
+        s.textContent = ch;
+      }
+      wordEl.appendChild(s);
+    }
+  }
+
+  function renderLives(){
+    const left = MAX_WRONG - wrong;
+    let html = "";
+    for(let i=0;i<MAX_WRONG;i++){
+      html += i < left
+        ? '<span class="heart">♥</span>'
+        : '<span class="gone">♡</span>';
+    }
+    livesEl.innerHTML = html;
+  }
+
+  function guess(ch){
+    if(state !== "playing") return;
+    if(guessed.has(ch)) return;
+    guessed.add(ch);
+    const b = keyEls[ch];
+    if(secret.indexOf(ch) >= 0){
+      if(b){ b.classList.add("hit"); b.disabled = true; }
+      renderWord();
+      if(isSolved()) winRound();
+    } else {
+      wrong += 1;
+      if(b){ b.classList.add("miss"); b.disabled = true; }
+      renderLives();
+      drawGallows();
+      if(wrong >= MAX_WRONG) loseRound();
+    }
+  }
+
+  function isSolved(){
+    for(const ch of secret){
+      if(ch !== " " && !guessed.has(ch)) return false;
+    }
+    return true;
+  }
+
+  function winRound(){
+    state = "won";
+    streak += 1;
+    if(streak > best){ best = streak; localStorage.setItem(BEST_KEY, String(best)); }
+    updateScores();
+    overMsg.innerHTML = `맞혔다 · <b>${secret}</b>`;
+    overSmall.innerHTML = streak === best && best > 0
+      ? `연승 <b>${streak}</b> — 최고 기록.`
+      : `연승 <b>${streak}</b>. 멈추지 마라.`;
+    overlay.classList.add("show");
+  }
+
+  function loseRound(){
+    state = "lost";
+    revealWord();
+    const lostStreak = streak;
+    streak = 0;
+    updateScores();
+    overMsg.innerHTML = `매달렸다`;
+    overSmall.innerHTML = lostStreak > 0
+      ? `정답은 <b>${secret}</b>. 연승 ${lostStreak} 끊김.`
+      : `정답은 <b>${secret}</b>. 다시.`;
+    overlay.classList.add("show");
+  }
+
+  // --- gallows drawing: 6 wrong = full figure ---------------------------
+  // Steps build up satisfyingly: gallows base/post/beam/rope first,
+  // then head, body, arms, legs as wrong guesses accrue.
+  function drawGallows(){
+    const W = cv.width;          // 400 backing store
+    ctx.clearRect(0,0,W,W);
+    ctx.lineWidth = 9;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    // --- gallows structure (always present, dim) ---
+    ctx.strokeStyle = "#5a4c38";
+    ctx.beginPath();
+    // base
+    ctx.moveTo(60,360); ctx.lineTo(200,360);
+    // post
+    ctx.moveTo(110,360); ctx.lineTo(110,60);
+    // beam
+    ctx.lineTo(280,60);
+    // brace
+    ctx.moveTo(110,110); ctx.lineTo(160,60);
+    ctx.stroke();
+    // rope
+    ctx.strokeStyle = "#8a7250";
+    ctx.beginPath();
+    ctx.moveTo(280,60); ctx.lineTo(280,100);
+    ctx.stroke();
+
+    // --- the condemned (amber, drawn per wrong guess) ---
+    ctx.strokeStyle = "#ffb154";
+    const cx = 280;
+
+    if(wrong >= 1){ // head
+      ctx.beginPath();
+      ctx.arc(cx, 130, 30, 0, Math.PI*2);
+      ctx.stroke();
+    }
+    if(wrong >= 2){ // body
+      ctx.beginPath();
+      ctx.moveTo(cx,160); ctx.lineTo(cx,250);
+      ctx.stroke();
+    }
+    if(wrong >= 3){ // left arm
+      ctx.beginPath();
+      ctx.moveTo(cx,185); ctx.lineTo(cx-45,215);
+      ctx.stroke();
+    }
+    if(wrong >= 4){ // right arm
+      ctx.beginPath();
+      ctx.moveTo(cx,185); ctx.lineTo(cx+45,215);
+      ctx.stroke();
+    }
+    if(wrong >= 5){ // left leg
+      ctx.beginPath();
+      ctx.moveTo(cx,250); ctx.lineTo(cx-40,310);
+      ctx.stroke();
+    }
+    if(wrong >= 6){ // right leg + face (defeated)
+      ctx.beginPath();
+      ctx.moveTo(cx,250); ctx.lineTo(cx+40,310);
+      ctx.stroke();
+      // X eyes
+      ctx.strokeStyle = "#e0764a";
+      ctx.lineWidth = 5;
+      const ey = 124, eo = 11;
+      for(const sx of [cx-12, cx+12]){
+        ctx.beginPath();
+        ctx.moveTo(sx-eo, ey-eo); ctx.lineTo(sx+eo, ey+eo);
+        ctx.moveTo(sx+eo, ey-eo); ctx.lineTo(sx-eo, ey+eo);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // --- input ------------------------------------------------------------
+  window.addEventListener("keydown", e=>{
+    if(state !== "playing") return;
+    const k = e.key;
+    if(k.length === 1){
+      const up = k.toUpperCase();
+      if(up >= "A" && up <= "Z"){ e.preventDefault(); guess(up); }
+    }
+  });
+
+  document.getElementById("restart").addEventListener("click", newRound);
+  document.getElementById("overRestart").addEventListener("click", newRound);
+
+  buildKeyboard();
+  newRound();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>소행성 · Asteroids</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 12px;text-align:center;min-width:60px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:1/1;touch-action:none;overflow:hidden}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+
+  /* on-screen controls */
+  .pad{display:none;margin-top:16px;align-items:center;justify-content:space-between;gap:10px}
+  .pad.show{display:flex}
+  .pad-side{display:flex;gap:10px}
+  .btn{background:var(--panel);border:1px solid var(--line);color:var(--cream);
+    width:62px;height:62px;border-radius:16px;font-size:24px;font-weight:800;
+    display:flex;align-items:center;justify-content:center;font-family:inherit;
+    touch-action:none;user-select:none;-webkit-user-select:none;cursor:pointer}
+  .btn:active,.btn.on{background:#2c2418;border-color:var(--amber);color:var(--amber)}
+  .btn.fire{width:74px;height:74px;border-radius:18px;color:var(--amber);font-size:15px}
+  .btn.thrust{font-size:26px}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">소행성<span class="ref">돌고 밀고 쏘며 살아남는다 · Asteroids</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">점수</div><div class="val" id="score">0</div></div>
+      <div class="box"><div class="lbl">목숨</div><div class="val" id="lives">3</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">← → 회전 · ↑ 분사 · space 발사</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <canvas id="cv"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="pad" id="pad">
+    <div class="pad-side">
+      <div class="btn" id="bLeft">↺</div>
+      <div class="btn" id="bRight">↻</div>
+    </div>
+    <div class="pad-side">
+      <div class="btn thrust" id="bThrust">▲</div>
+      <div class="btn fire" id="bFire">발사</div>
+    </div>
+  </div>
+
+  <div class="foot">관성은 남는다 — 멈추려면 반대로 밀어라. 큰 돌은 쪼개지고, 작을수록 점수가 크다.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const BEST_KEY = "funlab:asteroids:best";
+  const WORLD = 1000;                 // logical world units (square)
+
+  // ship
+  const TURN_RATE   = 4.2;            // rad/sec
+  const THRUST      = 520;            // units/sec^2
+  const FRICTION    = 0.45;           // velocity damping per sec (gentle drift)
+  const MAX_SPEED   = 620;            // units/sec cap
+  const SHIP_R      = 22;             // collision radius
+  const INVULN      = 2.4;            // seconds of respawn invulnerability
+
+  // bullets
+  const BULLET_SPD  = 720;            // units/sec
+  const BULLET_LIFE = 0.95;           // seconds
+  const FIRE_CD     = 0.22;           // seconds between shots
+  const MAX_BULLETS = 5;
+
+  // asteroids: size tiers
+  const TIERS = {
+    3: { r: 78, score: 20,  minSpd: 40,  maxSpd: 95  },  // large
+    2: { r: 46, score: 50,  minSpd: 60,  maxSpd: 140 },  // medium
+    1: { r: 24, score: 100, minSpd: 90,  maxSpd: 200 }   // small
+  };
+
+  const boardEl  = document.getElementById("board");
+  const cv       = document.getElementById("cv");
+  const ctx      = cv.getContext("2d");
+  const scoreEl  = document.getElementById("score");
+  const livesEl  = document.getElementById("lives");
+  const bestEl   = document.getElementById("best");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+  const padEl    = document.getElementById("pad");
+
+  // --- pixel sizing (retina + responsive) -------------------------------
+  let scale = 0;     // device pixels per world unit
+  function resize(){
+    const rect = boardEl.getBoundingClientRect();
+    const dpr  = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const size = Math.round(rect.width * dpr);
+    cv.width  = size;
+    cv.height = size;
+    scale = size / WORLD;
+  }
+  window.addEventListener("resize", resize);
+
+  // --- state ------------------------------------------------------------
+  let ship, bullets, rocks, particles;
+  let score, lives, best, wave;
+  let state;          // 'playing' | 'over'
+  let lastT;          // timestamp of last frame
+  let fireTimer;      // cooldown countdown
+  let respawnDelay;   // >0 means ship destroyed, counting to respawn
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  // input flags
+  const input = { left:false, right:false, thrust:false, fire:false };
+
+  function rand(a, b){ return a + Math.random()*(b-a); }
+
+  function wrap(p){
+    if(p.x < 0) p.x += WORLD; else if(p.x >= WORLD) p.x -= WORLD;
+    if(p.y < 0) p.y += WORLD; else if(p.y >= WORLD) p.y -= WORLD;
+  }
+
+  // shortest wrapped delta between two points on one axis
+  function wrapDelta(a, b){
+    let d = a - b;
+    if(d > WORLD/2) d -= WORLD;
+    else if(d < -WORLD/2) d += WORLD;
+    return d;
+  }
+
+  function newShip(){
+    return {
+      x: WORLD/2, y: WORLD/2,
+      vx: 0, vy: 0,
+      angle: -Math.PI/2,       // pointing up
+      thrusting: false
+    };
+  }
+
+  function makeRock(x, y, tier){
+    const t = TIERS[tier];
+    const dir = rand(0, Math.PI*2);
+    const spd = rand(t.minSpd, t.maxSpd);
+    // jagged polygon: random radii around the base
+    const verts = [];
+    const count = tier === 3 ? 12 : tier === 2 ? 10 : 8;
+    for(let i=0;i<count;i++){
+      verts.push(rand(0.72, 1.12));
+    }
+    return {
+      x, y,
+      vx: Math.cos(dir)*spd,
+      vy: Math.sin(dir)*spd,
+      tier,
+      r: t.r,
+      verts,
+      angle: rand(0, Math.PI*2),
+      spin: rand(-1.1, 1.1)
+    };
+  }
+
+  function spawnWave(n){
+    rocks = [];
+    for(let i=0;i<n;i++){
+      // spawn away from ship center to avoid instant death
+      let x, y, tries = 0;
+      do{
+        x = rand(0, WORLD); y = rand(0, WORLD);
+        tries++;
+      } while(tries < 30 && dist2Wrapped(x, y, WORLD/2, WORLD/2) < 260*260);
+      rocks.push(makeRock(x, y, 3));
+    }
+  }
+
+  function dist2Wrapped(ax, ay, bx, by){
+    const dx = wrapDelta(ax, bx), dy = wrapDelta(ay, by);
+    return dx*dx + dy*dy;
+  }
+
+  function init(){
+    resize();
+    ship = newShip();
+    bullets = [];
+    particles = [];
+    score = 0;
+    lives = 3;
+    wave = 1;
+    fireTimer = 0;
+    respawnDelay = 0;
+    state = "playing";
+    spawnWave(4);
+    overlay.classList.remove("show");
+    updateHud();
+    lastT = performance.now();
+  }
+
+  function updateHud(){
+    scoreEl.textContent = score;
+    livesEl.textContent = Math.max(0, lives);
+    bestEl.textContent = best;
+  }
+
+  // --- firing -----------------------------------------------------------
+  function fire(){
+    if(state !== "playing" || respawnDelay > 0) return;
+    if(fireTimer > 0 || bullets.length >= MAX_BULLETS) return;
+    const tipX = ship.x + Math.cos(ship.angle)*SHIP_R;
+    const tipY = ship.y + Math.sin(ship.angle)*SHIP_R;
+    bullets.push({
+      x: tipX, y: tipY,
+      vx: ship.vx + Math.cos(ship.angle)*BULLET_SPD,
+      vy: ship.vy + Math.sin(ship.angle)*BULLET_SPD,
+      life: BULLET_LIFE
+    });
+    fireTimer = FIRE_CD;
+  }
+
+  function spawnDebris(x, y, n, col){
+    for(let i=0;i<n;i++){
+      const a = rand(0, Math.PI*2), s = rand(60, 280);
+      particles.push({
+        x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s,
+        life: rand(0.35, 0.8), max: 0.8, col: col || "#ffb154"
+      });
+    }
+  }
+
+  function splitRock(rock){
+    const t = TIERS[rock.tier];
+    score += t.score;
+    if(score > best){ best = score; localStorage.setItem(BEST_KEY, String(best)); }
+    spawnDebris(rock.x, rock.y, rock.tier*5, "#ffd9a0");
+    if(rock.tier > 1){
+      for(let k=0;k<2;k++) rocks.push(makeRock(rock.x, rock.y, rock.tier-1));
+    }
+    updateHud();
+  }
+
+  function killShip(){
+    spawnDebris(ship.x, ship.y, 22, "#ff8a3d");
+    lives -= 1;
+    updateHud();
+    if(lives <= 0){
+      gameOver();
+    } else {
+      respawnDelay = 1.1;   // brief pause before respawn
+    }
+  }
+
+  function respawn(){
+    ship = newShip();
+    ship.invuln = INVULN;
+  }
+
+  function gameOver(){
+    state = "over";
+    overMsg.innerHTML = `격침 · 점수 <b>${score}</b>`;
+    overSmall.textContent = (score >= best && score > 0)
+      ? "최고 기록 경신! 우주가 너를 기억한다." : "돌에 부딪혔다. 다시.";
+    overlay.classList.add("show");
+  }
+
+  // --- update -----------------------------------------------------------
+  function update(dt){
+    if(state !== "playing") return;
+
+    fireTimer = Math.max(0, fireTimer - dt);
+
+    // respawn handling
+    if(respawnDelay > 0){
+      respawnDelay -= dt;
+      if(respawnDelay <= 0){ respawnDelay = 0; respawn(); }
+    } else {
+      // --- ship controls ---
+      if(input.left)  ship.angle -= TURN_RATE*dt;
+      if(input.right) ship.angle += TURN_RATE*dt;
+      ship.thrusting = input.thrust;
+      if(input.thrust){
+        ship.vx += Math.cos(ship.angle)*THRUST*dt;
+        ship.vy += Math.sin(ship.angle)*THRUST*dt;
+        // thruster particles
+        if(Math.random() < 0.6){
+          const bx = ship.x - Math.cos(ship.angle)*SHIP_R;
+          const by = ship.y - Math.sin(ship.angle)*SHIP_R;
+          const a = ship.angle + Math.PI + rand(-0.4, 0.4);
+          particles.push({
+            x: bx, y: by, vx: Math.cos(a)*rand(80,200), vy: Math.sin(a)*rand(80,200),
+            life: rand(0.2, 0.45), max: 0.45, col: "#ff9e3d"
+          });
+        }
+      }
+      if(input.fire) fire();
+
+      // friction + speed cap + integrate
+      const damp = Math.max(0, 1 - FRICTION*dt);
+      ship.vx *= damp; ship.vy *= damp;
+      const sp = Math.hypot(ship.vx, ship.vy);
+      if(sp > MAX_SPEED){ ship.vx = ship.vx/sp*MAX_SPEED; ship.vy = ship.vy/sp*MAX_SPEED; }
+      ship.x += ship.vx*dt; ship.y += ship.vy*dt;
+      wrap(ship);
+      if(ship.invuln > 0) ship.invuln = Math.max(0, ship.invuln - dt);
+    }
+
+    // --- bullets ---
+    for(let i=bullets.length-1;i>=0;i--){
+      const b = bullets[i];
+      b.life -= dt;
+      if(b.life <= 0){ bullets.splice(i,1); continue; }
+      b.x += b.vx*dt; b.y += b.vy*dt;
+      wrap(b);
+    }
+
+    // --- rocks ---
+    for(const rk of rocks){
+      rk.x += rk.vx*dt; rk.y += rk.vy*dt;
+      rk.angle += rk.spin*dt;
+      wrap(rk);
+    }
+
+    // --- particles ---
+    for(let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      p.life -= dt;
+      if(p.life <= 0){ particles.splice(i,1); continue; }
+      p.x += p.vx*dt; p.y += p.vy*dt;
+      p.vx *= 0.96; p.vy *= 0.96;
+    }
+
+    // --- collisions: bullets vs rocks ---
+    for(let i=rocks.length-1;i>=0;i--){
+      const rk = rocks[i];
+      let hit = false;
+      for(let j=bullets.length-1;j>=0;j--){
+        const b = bullets[j];
+        if(dist2Wrapped(b.x, b.y, rk.x, rk.y) < rk.r*rk.r){
+          bullets.splice(j,1);
+          hit = true;
+          break;
+        }
+      }
+      if(hit){
+        rocks.splice(i,1);
+        splitRock(rk);
+      }
+    }
+
+    // --- collisions: ship vs rocks ---
+    if(respawnDelay <= 0 && (!ship.invuln || ship.invuln <= 0)){
+      for(const rk of rocks){
+        const rr = rk.r + SHIP_R*0.7;
+        if(dist2Wrapped(ship.x, ship.y, rk.x, rk.y) < rr*rr){
+          killShip();
+          break;
+        }
+      }
+    }
+
+    // --- wave clear ---
+    if(rocks.length === 0 && state === "playing"){
+      wave += 1;
+      spawnWave(Math.min(4 + wave, 11));
+      // gentle global speed bump handled by makeRock tiers; nudge here:
+      for(const rk of rocks){ rk.vx *= 1 + wave*0.04; rk.vy *= 1 + wave*0.04; }
+    }
+  }
+
+  // --- rendering --------------------------------------------------------
+  // draw a shape at world (x,y), and also at wrapped mirror positions if it
+  // straddles an edge, so wrap-around reads seamlessly.
+  function drawWrapped(x, y, r, fn){
+    // also draw at wrapped mirror positions when straddling an edge
+    const xs = [x];
+    if(x < r) xs.push(x + WORLD);
+    else if(x > WORLD - r) xs.push(x - WORLD);
+    const ys = [y];
+    if(y < r) ys.push(y + WORLD);
+    else if(y > WORLD - r) ys.push(y - WORLD);
+    for(const px of xs) for(const py of ys){
+      ctx.save();
+      ctx.translate(px*scale, py*scale);
+      fn();
+      ctx.restore();
+    }
+  }
+
+  function drawShipShape(){
+    const r = SHIP_R;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(0)*r, Math.sin(0)*r);                       // nose (local +x)
+    ctx.lineTo(Math.cos(2.5)*r, Math.sin(2.5)*r);
+    ctx.lineTo(Math.cos(Math.PI)*r*0.5, Math.sin(Math.PI)*r*0.5);   // tail notch
+    ctx.lineTo(Math.cos(-2.5)*r, Math.sin(-2.5)*r);
+    ctx.closePath();
+  }
+
+  function render(){
+    const W = cv.width;
+    ctx.clearRect(0,0,W,W);
+
+    // starfield-ish faint dots (static, cheap)
+    // (skip heavy work; keep classic empty space)
+
+    // --- rocks (jagged amber line polygons) ---
+    ctx.lineJoin = "round";
+    for(const rk of rocks){
+      drawWrapped(rk.x, rk.y, rk.r, ()=>{
+        ctx.rotate(rk.angle);
+        ctx.beginPath();
+        const n = rk.verts.length;
+        for(let i=0;i<n;i++){
+          const a = (i/n)*Math.PI*2;
+          const rr = rk.r * rk.verts[i] * scale;
+          const vx = Math.cos(a)*rr, vy = Math.sin(a)*rr;
+          if(i===0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
+        }
+        ctx.closePath();
+        ctx.fillStyle = "rgba(255,177,84,0.06)";
+        ctx.fill();
+        ctx.strokeStyle = "#d99a4e";
+        ctx.lineWidth = Math.max(1, 2.2*scale);
+        ctx.stroke();
+      });
+    }
+
+    // --- bullets ---
+    ctx.fillStyle = "#ffe7c2";
+    for(const b of bullets){
+      drawWrapped(b.x, b.y, 6, ()=>{
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.max(1.5, 3.2*scale), 0, Math.PI*2);
+        ctx.fill();
+      });
+    }
+
+    // --- particles ---
+    for(const p of particles){
+      const al = Math.max(0, p.life / p.max);
+      ctx.globalAlpha = al;
+      ctx.fillStyle = p.col;
+      ctx.beginPath();
+      ctx.arc(p.x*scale, p.y*scale, Math.max(1, 2.4*scale), 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // --- ship ---
+    if(state === "playing" && respawnDelay <= 0){
+      const blink = (ship.invuln && ship.invuln > 0) ? (Math.sin(performance.now()/70) > -0.3) : true;
+      if(blink){
+        drawWrapped(ship.x, ship.y, SHIP_R, ()=>{
+          ctx.rotate(ship.angle);
+          ctx.shadowColor = "rgba(255,177,84,0.6)";
+          ctx.shadowBlur = 8*scale;
+          drawShipShape();
+          ctx.fillStyle = "rgba(255,178,84,0.12)";
+          ctx.fill();
+          ctx.strokeStyle = "#ffc879";
+          ctx.lineWidth = Math.max(1.4, 2.4*scale);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+          // thrust flame
+          if(ship.thrusting && Math.random() < 0.8){
+            const r = SHIP_R;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(2.5)*r*0.7, Math.sin(2.5)*r*0.7);
+            ctx.lineTo(-r*(0.9 + Math.random()*0.5), 0);
+            ctx.lineTo(Math.cos(-2.5)*r*0.7, Math.sin(-2.5)*r*0.7);
+            ctx.strokeStyle = "#ff9e3d";
+            ctx.stroke();
+          }
+        });
+      }
+    }
+  }
+
+  // --- main loop --------------------------------------------------------
+  function frame(now){
+    let dt = (now - lastT) / 1000;
+    lastT = now;
+    if(dt > 0.05) dt = 0.05;   // clamp big gaps (tab switch)
+    update(dt);
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  // --- input bindings ---------------------------------------------------
+  const KEY = {
+    ArrowLeft:"left", a:"left", A:"left",
+    ArrowRight:"right", d:"right", D:"right",
+    ArrowUp:"thrust", w:"thrust", W:"thrust",
+    " ":"fire"
+  };
+  window.addEventListener("keydown", e=>{
+    const k = KEY[e.key];
+    if(k){
+      e.preventDefault();
+      input[k] = true;
+    }
+  });
+  window.addEventListener("keyup", e=>{
+    const k = KEY[e.key];
+    if(k){ e.preventDefault(); input[k] = false; }
+  });
+
+  // on-screen buttons (show on touch devices)
+  function isTouch(){
+    return ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  }
+  if(isTouch()) padEl.classList.add("show");
+
+  function bindHold(el, key){
+    const on = e=>{ e.preventDefault(); input[key] = true; el.classList.add("on"); };
+    const off = e=>{ if(e) e.preventDefault(); input[key] = false; el.classList.remove("on"); };
+    el.addEventListener("touchstart", on, {passive:false});
+    el.addEventListener("touchend", off, {passive:false});
+    el.addEventListener("touchcancel", off, {passive:false});
+    el.addEventListener("mousedown", on);
+    el.addEventListener("mouseup", off);
+    el.addEventListener("mouseleave", off);
+  }
+  bindHold(document.getElementById("bLeft"), "left");
+  bindHold(document.getElementById("bRight"), "right");
+  bindHold(document.getElementById("bThrust"), "thrust");
+  bindHold(document.getElementById("bFire"), "fire");
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>오델로 · Reversi</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:7px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 11px;text-align:center;min-width:58px;
+    transition:border-color .2s,box-shadow .2s}
+  .box.active{border-color:var(--amber);box-shadow:0 0 0 1px rgba(255,177,84,.35)}
+  .box .lbl{font-size:10px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .box.you .val{color:var(--amber)}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted);min-height:16px}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:1/1;touch-action:none;overflow:hidden;cursor:pointer}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:24px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">오델로<span class="ref">끼워서 뒤집어 다수를 차지한다 · Reversi</span></div>
+    <div class="scores">
+      <div class="box you" id="boxYou"><div class="lbl">내 돌</div><div class="val" id="me">2</div></div>
+      <div class="box" id="boxAi"><div class="lbl">AI</div><div class="val" id="ai">2</div></div>
+      <div class="box"><div class="lbl">wins</div><div class="val" id="wins">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint" id="status">네 차례 · 빈 칸을 눌러라</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <canvas id="cv"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">상대 돌을 직선으로 양끝에서 가두면 그 줄이 전부 내 색으로 뒤집힌다. 모서리를 잡아라.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const N = 8;
+  const BEST_KEY = "funlab:reversi:best";   // stores total wins
+  const PLAYER = 1, AI = 2;
+  const DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+
+  // positional value: corners high, X/C-squares penalised
+  const WEIGHTS = [
+    120,-20, 20,  5,  5, 20,-20,120,
+    -20,-40, -5, -5, -5, -5,-40,-20,
+     20, -5, 15,  3,  3, 15, -5, 20,
+      5, -5,  3,  3,  3,  3, -5,  5,
+      5, -5,  3,  3,  3,  3, -5,  5,
+     20, -5, 15,  3,  3, 15, -5, 20,
+    -20,-40, -5, -5, -5, -5,-40,-20,
+    120,-20, 20,  5,  5, 20,-20,120
+  ];
+
+  const boardEl  = document.getElementById("board");
+  const cv       = document.getElementById("cv");
+  const ctx      = cv.getContext("2d");
+  const meEl     = document.getElementById("me");
+  const aiEl     = document.getElementById("ai");
+  const winsEl   = document.getElementById("wins");
+  const statusEl = document.getElementById("status");
+  const boxYou   = document.getElementById("boxYou");
+  const boxAi    = document.getElementById("boxAi");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+
+  // --- pixel sizing (retina + responsive) -------------------------------
+  let px = 0;   // device pixels per cell
+  function resize(){
+    const rect = boardEl.getBoundingClientRect();
+    const dpr  = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const size = Math.round(rect.width * dpr);
+    cv.width  = size;
+    cv.height = size;
+    px = size / N;
+  }
+  window.addEventListener("resize", resize);
+
+  // --- state ------------------------------------------------------------
+  let board;      // Int8Array(64): 0 empty, 1 player, 2 ai
+  let turn;       // whose turn now
+  let state;      // 'player' | 'ai' | 'anim' | 'over'
+  let anim;       // {start,total,placed,placedColor,flipMap} | null
+  let wins = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+  let statusTimer = null;
+
+  const PLACED_DUR = 190, FLIP_DUR = 240;
+
+  // --- rules ------------------------------------------------------------
+  function flipsFor(bd, idx, player){
+    if(bd[idx] !== 0) return [];
+    const opp = player === 1 ? 2 : 1;
+    const r0 = (idx / N) | 0, c0 = idx % N;
+    const out = [];
+    for(const [dr,dc] of DIRS){
+      let r = r0 + dr, c = c0 + dc;
+      const line = [];
+      while(r>=0 && r<N && c>=0 && c<N && bd[r*N+c] === opp){ line.push(r*N+c); r+=dr; c+=dc; }
+      if(line.length && r>=0 && r<N && c>=0 && c<N && bd[r*N+c] === player){
+        for(const x of line) out.push(x);
+      }
+    }
+    return out;
+  }
+  function legalMoves(bd, player){
+    const m = [];
+    for(let i=0;i<64;i++){ if(bd[i]===0 && flipsFor(bd,i,player).length) m.push(i); }
+    return m;
+  }
+  function hasMove(bd, player){
+    for(let i=0;i<64;i++){ if(bd[i]===0 && flipsFor(bd,i,player).length) return true; }
+    return false;
+  }
+  function applyMove(bd, idx, player){
+    const nb = bd.slice();
+    nb[idx] = player;
+    const fl = flipsFor(bd, idx, player);
+    for(const x of fl) nb[x] = player;
+    return nb;
+  }
+  function counts(bd){
+    let me=0, ai=0;
+    for(let i=0;i<64;i++){ if(bd[i]===1)me++; else if(bd[i]===2)ai++; }
+    return {me, ai};
+  }
+  function countEmpty(bd){
+    let e=0; for(let i=0;i<64;i++) if(bd[i]===0) e++; return e;
+  }
+
+  // --- AI: alpha-beta minimax over a corner-weighted heuristic ----------
+  function terminalScore(bd, me){
+    const opp = me===1?2:1;
+    const c = counts(bd);
+    const mine = me===1?c.me:c.ai, his = me===1?c.ai:c.me;
+    return (mine>his?1:mine<his?-1:0)*100000 + (mine-his);
+  }
+  function evaluate(bd, me){
+    const opp = me===1?2:1;
+    let pos = 0;
+    for(let i=0;i<64;i++){
+      if(bd[i]===me) pos += WEIGHTS[i];
+      else if(bd[i]===opp) pos -= WEIGHTS[i];
+    }
+    const myMob = legalMoves(bd, me).length;
+    const opMob = legalMoves(bd, opp).length;
+    let mob = 0;
+    if(myMob + opMob) mob = 100 * (myMob - opMob) / (myMob + opMob);
+    return pos + mob * 0.9;
+  }
+  function minimax(bd, depth, me, cur, alpha, beta){
+    if(depth === 0) return evaluate(bd, me);
+    const opp = cur===1?2:1;
+    const moves = legalMoves(bd, cur);
+    if(moves.length === 0){
+      if(!hasMove(bd, opp)) return terminalScore(bd, me);
+      return minimax(bd, depth-1, me, opp, alpha, beta); // pass
+    }
+    if(cur === me){
+      let best = -Infinity;
+      for(const m of moves){
+        const v = minimax(applyMove(bd, m, cur), depth-1, me, opp, alpha, beta);
+        if(v > best) best = v;
+        if(best > alpha) alpha = best;
+        if(alpha >= beta) break;
+      }
+      return best;
+    } else {
+      let best = Infinity;
+      for(const m of moves){
+        const v = minimax(applyMove(bd, m, cur), depth-1, me, opp, alpha, beta);
+        if(v < best) best = v;
+        if(best < beta) beta = best;
+        if(alpha >= beta) break;
+      }
+      return best;
+    }
+  }
+  function chooseAiMove(){
+    const moves = legalMoves(board, AI);
+    if(!moves.length) return null;
+    const empties = countEmpty(board);
+    const depth = empties <= 8 ? empties : 4;   // exact endgame, else 4-ply
+    let best = -Infinity, bestM = moves[0];
+    for(const m of moves){
+      const v = minimax(applyMove(board, m, AI), depth-1, AI, PLAYER, -Infinity, Infinity);
+      if(v > best){ best = v; bestM = m; }
+    }
+    return bestM;
+  }
+
+  // --- status / scores --------------------------------------------------
+  function playerStatusText(){ return "네 차례 · 빈 칸을 눌러라"; }
+  function setStatus(t){
+    if(statusTimer){ clearTimeout(statusTimer); statusTimer = null; }
+    statusEl.textContent = t;
+  }
+  function flashStatus(t, revert){
+    setStatus(t);
+    statusTimer = setTimeout(()=>{ statusEl.textContent = revert; statusTimer = null; }, 1000);
+  }
+  function updateScores(){
+    const c = counts(board);
+    meEl.textContent = c.me;
+    aiEl.textContent = c.ai;
+    winsEl.textContent = wins;
+  }
+  function setActive(){
+    boxYou.classList.toggle("active", state==="player");
+    boxAi.classList.toggle("active", state==="ai");
+  }
+
+  // --- moves & turn flow ------------------------------------------------
+  function doMove(idx, player){
+    const flips = flipsFor(board, idx, player);
+    board[idx] = player;
+    let maxDelay = 0;
+    const flipMap = new Map();
+    flips.forEach((x, i)=>{
+      const from = board[x];          // current owner = opponent (pre-flip)
+      board[x] = player;
+      const delay = Math.min(i * 22, 120);
+      if(delay > maxDelay) maxDelay = delay;
+      flipMap.set(x, {from, to:player, delay});
+    });
+    const total = Math.max(PLACED_DUR, maxDelay + FLIP_DUR) + 30;
+    anim = { start: performance.now(), total, placed: idx, placedColor: player, flipMap };
+    state = "anim";
+    setActive();
+    updateScores();
+  }
+
+  function afterAnim(){
+    turn = turn === 1 ? 2 : 1;
+    resolveTurn();
+  }
+
+  function resolveTurn(){
+    const other = turn === 1 ? 2 : 1;
+    if(!hasMove(board, turn)){
+      if(!hasMove(board, other)){ endGame(); return; }
+      // current side must pass
+      turn = other;
+      setActive();
+      if(turn === AI){
+        state = "ai"; setActive();
+        setStatus("네가 둘 곳 없음 · 패스 → AI 차례");
+        setTimeout(()=>{ if(state==="ai") aiTurn(); }, 720);
+      } else {
+        state = "player"; setActive();
+        setStatus("AI 둘 곳 없음 · 패스 → 다시 네 차례");
+      }
+      return;
+    }
+    setActive();
+    if(turn === AI){
+      state = "ai"; setActive();
+      setStatus("AI 차례…");
+      setTimeout(()=>{ if(state==="ai") aiTurn(); }, 430);
+    } else {
+      state = "player"; setActive();
+      setStatus(playerStatusText());
+    }
+  }
+
+  function aiTurn(){
+    if(state !== "ai") return;
+    const m = chooseAiMove();
+    if(m == null){ afterAnim(); return; } // safety; passes handled in resolveTurn
+    doMove(m, AI);
+  }
+
+  function tryPlayerMove(idx){
+    if(state !== "player") return;
+    if(board[idx] !== 0 || !flipsFor(board, idx, PLAYER).length){
+      flashStatus("거기엔 못 끼운다", playerStatusText());
+      return;
+    }
+    doMove(idx, PLAYER);
+  }
+
+  function endGame(){
+    state = "over";
+    setActive();
+    const c = counts(board);
+    if(c.me > c.ai){
+      wins += 1;
+      localStorage.setItem(BEST_KEY, String(wins));
+      overMsg.innerHTML = `이겼다 · <b>${c.me}</b> : ${c.ai}`;
+      overSmall.textContent = `${c.me - c.ai}점 차로 판을 차지했다.`;
+      setStatus(`이겼다 · ${c.me} : ${c.ai}`);
+    } else if(c.me < c.ai){
+      overMsg.innerHTML = `졌다 · ${c.me} : <b>${c.ai}</b>`;
+      overSmall.textContent = "AI가 더 많이 뒤집었다. 모서리를 노려라.";
+      setStatus(`졌다 · ${c.me} : ${c.ai}`);
+    } else {
+      overMsg.innerHTML = `비김 · <b>${c.me}</b> : ${c.ai}`;
+      overSmall.textContent = "정확히 반반. 다음엔 갈라라.";
+      setStatus(`비김 · ${c.me} : ${c.ai}`);
+    }
+    updateScores();
+    overlay.classList.add("show");
+  }
+
+  // --- rendering --------------------------------------------------------
+  function drawDisc(cx, cy, rx, ry, owner){
+    const gr = Math.max(ry, 0.5);
+    let g;
+    if(owner === PLAYER){
+      g = ctx.createRadialGradient(cx - rx*0.35, cy - gr*0.35, gr*0.1, cx, cy, gr);
+      g.addColorStop(0, "#ffd9a0");
+      g.addColorStop(1, "#ef862c");
+    } else {
+      g = ctx.createRadialGradient(cx - rx*0.35, cy - gr*0.35, gr*0.1, cx, cy, gr);
+      g.addColorStop(0, "#fcf5e6");
+      g.addColorStop(1, "#c7b591");
+    }
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.38)";
+    ctx.shadowBlur = gr * 0.2;
+    ctx.shadowOffsetY = gr * 0.08;
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, Math.max(rx,0.5), gr, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowColor = "transparent";
+    ctx.lineWidth = Math.max(1, gr * 0.045);
+    ctx.strokeStyle = owner === PLAYER ? "rgba(120,58,8,0.35)" : "rgba(120,100,60,0.32)";
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function render(now){
+    const W = cv.width;
+    ctx.clearRect(0,0,W,W);
+
+    // felt
+    const felt = ctx.createLinearGradient(0,0,0,W);
+    felt.addColorStop(0, "#2a2114");
+    felt.addColorStop(1, "#1c160f");
+    ctx.fillStyle = felt;
+    ctx.fillRect(0,0,W,W);
+
+    // grid
+    ctx.strokeStyle = "rgba(58,48,36,0.95)";
+    ctx.lineWidth = Math.max(1, px*0.02);
+    ctx.beginPath();
+    for(let i=1;i<N;i++){
+      const p = Math.round(i*px) + 0.5;
+      ctx.moveTo(p,0); ctx.lineTo(p,W);
+      ctx.moveTo(0,p); ctx.lineTo(W,p);
+    }
+    ctx.stroke();
+
+    // star points
+    ctx.fillStyle = "rgba(58,48,36,0.95)";
+    for(const [r,c] of [[2,2],[2,6],[6,2],[6,6]]){
+      ctx.beginPath();
+      ctx.arc(c*px, r*px, px*0.06, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    const r0 = px * 0.40;
+
+    // legal-move hints for the player
+    if(state === "player"){
+      const lm = legalMoves(board, PLAYER);
+      ctx.fillStyle = "rgba(255,177,84,0.20)";
+      for(const idx of lm){
+        const c = idx % N, r = (idx / N) | 0;
+        ctx.beginPath();
+        ctx.arc((c+0.5)*px, (r+0.5)*px, px*0.13, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    // discs
+    for(let i=0;i<64;i++){
+      const owner = board[i];
+      if(owner === 0) continue;
+      const c = i % N, r = (i / N) | 0;
+      const cx = (c+0.5)*px, cy = (r+0.5)*px;
+
+      if(anim && i === anim.placed){
+        const t = Math.min(1, (now - anim.start) / PLACED_DUR);
+        const s = 1 - (1-t)*(1-t);          // ease-out grow
+        drawDisc(cx, cy, r0*s, r0*s, anim.placedColor);
+      } else if(anim && anim.flipMap.has(i)){
+        const f = anim.flipMap.get(i);
+        let p = (now - anim.start - f.delay) / FLIP_DUR;
+        if(p < 0) p = 0; if(p > 1) p = 1;
+        const sx = Math.abs(Math.cos(p * Math.PI));
+        const who = p < 0.5 ? f.from : f.to;
+        drawDisc(cx, cy, r0*sx, r0, who);
+      } else {
+        drawDisc(cx, cy, r0, r0, owner);
+      }
+    }
+  }
+
+  function frame(now){
+    render(now);
+    if(anim && now - anim.start >= anim.total){
+      anim = null;
+      afterAnim();
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // --- init -------------------------------------------------------------
+  function init(){
+    resize();
+    board = new Int8Array(64);
+    board[3*N+3] = AI;     // d4
+    board[3*N+4] = PLAYER; // e4
+    board[4*N+3] = PLAYER; // d5
+    board[4*N+4] = AI;     // e5
+    turn = PLAYER;
+    state = "player";
+    anim = null;
+    overlay.classList.remove("show");
+    setStatus(playerStatusText());
+    setActive();
+    updateScores();
+  }
+
+  // --- input ------------------------------------------------------------
+  function cellFromEvent(clientX, clientY){
+    const rect = boardEl.getBoundingClientRect();
+    const c = Math.floor((clientX - rect.left) / rect.width * N);
+    const r = Math.floor((clientY - rect.top) / rect.height * N);
+    if(r < 0 || r >= N || c < 0 || c >= N) return -1;
+    return r*N + c;
+  }
+  boardEl.addEventListener("click", e=>{
+    const idx = cellFromEvent(e.clientX, e.clientY);
+    if(idx >= 0) tryPlayerMove(idx);
+  });
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

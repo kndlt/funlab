@@ -130,6 +130,38 @@ const GAMES=[
   // ── mastery (joins 머지) ──
   {slug:'gems',   title:'보석 맞추기',ref:'Match-3',        cat:'mastery',
    essence:'인접한 둘을 바꿔 셋 이상을 *터뜨린다*.', nerve:'mastery ⊗ cascade'},
+
+  // ══ batch 3 — new genres (cards · strategy · aim · arcade) + deeper deduction ══
+  // ── cards ──
+  {slug:'blackjack',title:'블랙잭',  ref:'Blackjack',       cat:'cards',
+   essence:'21에 가깝게 — 버스트 직전의 *욕심*.', nerve:'risk ⊗ count'},
+  // ── strategy (vs AI) ──
+  {slug:'connect4',title:'사목',     ref:'Connect Four',    cat:'strategy',
+   essence:'네 개를 먼저 *잇는* 쪽이 이긴다.', nerve:'strategy ⊗ foresight'},
+  {slug:'reversi',title:'오델로',    ref:'Reversi',         cat:'strategy',
+   essence:'끼워서 *뒤집어* 다수를 차지한다.', nerve:'strategy ⊗ flip'},
+  // ── deduction (joins 워들·지뢰찾기) ──
+  {slug:'sudoku', title:'스도쿠',    ref:'Sudoku',          cat:'deduction',
+   essence:'숫자로 빈칸을 *추리*해 채운다.', nerve:'deduction ⊗ logic'},
+  {slug:'nonogram',title:'노노그램', ref:'Picross',         cat:'deduction',
+   essence:'숫자 힌트로 숨은 *그림*을 채운다.', nerve:'deduction ⊗ image'},
+  {slug:'hangman',title:'행맨',      ref:'Hangman',         cat:'deduction',
+   essence:'글자를 *추리*해 단어를 맞힌다.', nerve:'deduction ⊗ word'},
+  // ── aim ──
+  {slug:'artillery',title:'포격',    ref:'Artillery',       cat:'aim',
+   essence:'각도와 힘을 맞춰 *맞힌다* — 바람을 읽어라.', nerve:'aim ⊗ physics'},
+  // ── arcade ──
+  {slug:'asteroids',title:'소행성',  ref:'Asteroids',       cat:'arcade',
+   essence:'돌고 밀고 쏘며 *살아남는다*.', nerve:'skill ⊗ survival'},
+  {slug:'invaders',title:'인베이더', ref:'Space Invaders',  cat:'arcade',
+   essence:'내려오는 적을 *막아내며* 버틴다.', nerve:'skill ⊗ defense'},
+  {slug:'frogger',title:'개구리',    ref:'Frogger',         cat:'arcade',
+   essence:'차와 강을 *건너* 반대편에 닿는다.', nerve:'timing ⊗ crossing'},
+  {slug:'pong',   title:'퐁',        ref:'Pong',            cat:'arcade',
+   essence:'받아쳐 넘긴다 — 먼저 *놓치면* 진다.', nerve:'skill ⊗ reflex'},
+  // ── risk (joins 한 번 더?) ──
+  {slug:'slot',   title:'슬롯머신',  ref:'Slot Machine',    cat:'risk',
+   essence:'돌리고 멈춘다 — 변동 보상의 *중독*.', nerve:'luck ⊗ jackpot'},
 ];
 
 const grid=document.getElementById('grid');

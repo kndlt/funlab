@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>사목 · Connect Four</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12;
+    --gap:7px;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .hint b{color:var(--amber);font-weight:700}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:7/6;padding:10px;display:grid;grid-template-columns:repeat(7,1fr);
+    gap:var(--gap);overflow:visible;touch-action:none}
+  .col{display:grid;grid-template-rows:repeat(6,1fr);gap:var(--gap);cursor:pointer;border-radius:9px}
+  .col:hover{background:rgba(255,177,84,.06)}
+  .cell{display:flex;align-items:center;justify-content:center}
+  .disc{width:86%;aspect-ratio:1/1;border-radius:50%;background:var(--cell);
+    box-shadow:inset 0 2px 4px rgba(0,0,0,.45)}
+  .disc.p1{background:radial-gradient(circle at 38% 34%,#ffd28a,#ff9e2e 68%,#df7c11);
+    box-shadow:inset 0 -3px 6px rgba(0,0,0,.28),0 1px 3px rgba(0,0,0,.4)}
+  .disc.p2{background:radial-gradient(circle at 38% 34%,#fffaf0,#e9d9bc 68%,#c7b390);
+    box-shadow:inset 0 -3px 6px rgba(0,0,0,.2),0 1px 3px rgba(0,0,0,.4)}
+  .disc.drop{position:relative;z-index:3;animation:drop .44s cubic-bezier(.4,0,.7,1)}
+  @keyframes drop{
+    0%{transform:translateY(var(--drop));animation-timing-function:cubic-bezier(.45,.02,1,.62)}
+    58%{transform:translateY(0)}
+    72%{transform:translateY(-8%)}
+    86%{transform:translateY(0)}
+    93%{transform:translateY(-3%)}
+    100%{transform:translateY(0)}
+  }
+  .disc.win{animation:wpulse .7s ease-in-out infinite alternate}
+  @keyframes wpulse{
+    from{box-shadow:inset 0 -3px 6px rgba(0,0,0,.22),0 0 0 rgba(255,177,84,0)}
+    to{box-shadow:inset 0 -3px 6px rgba(0,0,0,.22),0 0 16px 4px rgba(255,177,84,.85)}
+  }
+
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">사목<span class="ref">네 개를 먼저 잇는 쪽이 이긴다 · Connect Four</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">연승</div><div class="val" id="streak">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint" id="hint">열을 눌러 떨어뜨려라</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">너는 호박색, AI는 크림색. 가로·세로·대각선 — 어디로든 넷을 먼저 이으면 이긴다.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const ROWS = 6, COLS = 7;
+  const DEPTH = 5;                       // minimax search depth
+  const BEST_KEY = "funlab:connect4:best";
+  const HUMAN = 1, AI = 2;               // cell values
+  const ORDER = [3,2,4,1,5,0,6];         // center-first move ordering
+  const DIRS = [[0,1],[1,0],[1,1],[1,-1]];
+
+  const boardEl   = document.getElementById("board");
+  const overlay   = document.getElementById("overlay");
+  const overMsg   = document.getElementById("overMsg");
+  const overSmall = document.getElementById("overSmall");
+  const streakEl  = document.getElementById("streak");
+  const bestEl    = document.getElementById("best");
+  const hintEl    = document.getElementById("hint");
+
+  // --- state ------------------------------------------------------------
+  let g;            // ROWS x COLS numeric grid (0 empty, 1 human, 2 ai)
+  let cellEls;      // ROWS x COLS disc element refs
+  let turn;         // whose turn: HUMAN | AI
+  let busy;         // input locked (animating / ai thinking)
+  let over;         // game finished
+  let streak, best; // win streak vs AI
+  let firstPlayer;  // who starts this game (alternates)
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+  firstPlayer = HUMAN;
+
+  // --- board helpers (pure, operate on grid g) --------------------------
+  function inb(r,c){ return r>=0 && r<ROWS && c>=0 && c<COLS; }
+
+  function validMoves(b){
+    const m=[];
+    for(let c=0;c<COLS;c++) if(b[0][c]===0) m.push(c);
+    return m;
+  }
+  function orderedMoves(b){
+    const out=[];
+    for(const c of ORDER) if(b[0][c]===0) out.push(c);
+    return out;
+  }
+  function landingRow(b,c){
+    for(let r=ROWS-1;r>=0;r--) if(b[r][c]===0) return r;
+    return -1;
+  }
+  function place(b,c,p){ const r=landingRow(b,c); if(r>=0) b[r][c]=p; return r; }
+  function unplace(b,r,c){ b[r][c]=0; }
+  function isFull(b){ return validMoves(b).length===0; }
+
+  // returns the winning line (array of [r,c]) through (r,c) for player p, or null
+  function winLineAt(b,r,c,p){
+    for(const [dr,dc] of DIRS){
+      const line=[[r,c]];
+      for(const s of [1,-1]){
+        let rr=r+dr*s, cc=c+dc*s;
+        while(inb(rr,cc) && b[rr][cc]===p){ line.push([rr,cc]); rr+=dr*s; cc+=dc*s; }
+      }
+      if(line.length>=4) return line;
+    }
+    return null;
+  }
+
+  // --- heuristic --------------------------------------------------------
+  function winScore(me,opp){
+    if(me>0 && opp>0) return 0;     // mixed window: dead
+    if(me===3) return 60;
+    if(me===2) return 10;
+    if(me===1) return 1;
+    if(opp===3) return -70;         // value blocking a bit higher
+    if(opp===2) return -10;
+    if(opp===1) return -1;
+    return 0;
+  }
+  function scoreBoard(b){
+    let s=0;
+    // center column bias
+    for(let r=0;r<ROWS;r++){
+      if(b[r][3]===AI) s+=4; else if(b[r][3]===HUMAN) s-=4;
+    }
+    // every length-4 window
+    for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+      for(const [dr,dc] of DIRS){
+        const er=r+dr*3, ec=c+dc*3;
+        if(!inb(er,ec)) continue;
+        let me=0,opp=0;
+        for(let k=0;k<4;k++){
+          const v=b[r+dr*k][c+dc*k];
+          if(v===AI) me++; else if(v===HUMAN) opp++;
+        }
+        s+=winScore(me,opp);
+      }
+    }
+    return s;
+  }
+
+  // --- minimax with alpha-beta -----------------------------------------
+  function minimax(b, depth, alpha, beta, maxing, lr, lc, lp){
+    if(lr>=0 && winLineAt(b,lr,lc,lp)){
+      // last mover completed a line
+      return lp===AI ? (100000+depth) : (-100000-depth);
+    }
+    const moves=orderedMoves(b);
+    if(depth===0 || moves.length===0) return scoreBoard(b);
+
+    if(maxing){
+      let best=-Infinity;
+      for(const c of moves){
+        const r=place(b,c,AI);
+        const v=minimax(b,depth-1,alpha,beta,false,r,c,AI);
+        unplace(b,r,c);
+        if(v>best) best=v;
+        if(best>alpha) alpha=best;
+        if(alpha>=beta) break;
+      }
+      return best;
+    } else {
+      let best=Infinity;
+      for(const c of moves){
+        const r=place(b,c,HUMAN);
+        const v=minimax(b,depth-1,alpha,beta,true,r,c,HUMAN);
+        unplace(b,r,c);
+        if(v<best) best=v;
+        if(best<beta) beta=best;
+        if(alpha>=beta) break;
+      }
+      return best;
+    }
+  }
+
+  function aiMove(){
+    const moves=validMoves(g);
+    // 1) take an immediate win
+    for(const c of moves){
+      const r=place(g,c,AI); const w=winLineAt(g,r,c,AI); unplace(g,r,c);
+      if(w) return c;
+    }
+    // 2) block an immediate opponent win
+    for(const c of moves){
+      const r=place(g,c,HUMAN); const w=winLineAt(g,r,c,HUMAN); unplace(g,r,c);
+      if(w) return c;
+    }
+    // 3) full minimax search (center-first, ties favor center)
+    let bestVal=-Infinity, bestCol=orderedMoves(g)[0];
+    for(const c of orderedMoves(g)){
+      const r=place(g,c,AI);
+      const v=minimax(g,DEPTH-1,-Infinity,Infinity,false,r,c,AI);
+      unplace(g,r,c);
+      if(v>bestVal){ bestVal=v; bestCol=c; }
+    }
+    return bestCol;
+  }
+
+  // --- DOM build / render ----------------------------------------------
+  function buildBoard(){
+    // remove old columns (keep overlay)
+    [...boardEl.querySelectorAll(".col")].forEach(el=>el.remove());
+    cellEls=Array.from({length:ROWS},()=>Array(COLS));
+    for(let c=0;c<COLS;c++){
+      const col=document.createElement("div");
+      col.className="col";
+      col.dataset.col=c;
+      for(let r=0;r<ROWS;r++){
+        const cell=document.createElement("div");
+        cell.className="cell";
+        const disc=document.createElement("div");
+        disc.className="disc";
+        cell.appendChild(disc);
+        col.appendChild(cell);
+        cellEls[r][c]=disc;
+      }
+      col.addEventListener("click", ()=>humanDrop(c));
+      boardEl.appendChild(col);
+    }
+  }
+
+  function dropDisc(r,c,p,onDone){
+    const disc=cellEls[r][c];
+    disc.classList.add(p===HUMAN?"p1":"p2");
+    const cell=disc.parentNode;
+    const dist=cell.offsetTop + cell.offsetHeight;  // px above board top
+    disc.style.setProperty("--drop","-"+dist+"px");
+    disc.classList.add("drop");
+    disc.addEventListener("animationend", function h(){
+      disc.removeEventListener("animationend",h);
+      disc.classList.remove("drop");
+      onDone();
+    }, {once:true});
+  }
+
+  function highlight(line){ for(const [r,c] of line) cellEls[r][c].classList.add("win"); }
+
+  function setHint(html){ hintEl.innerHTML=html; }
+
+  function updateScores(){
+    streakEl.textContent=streak;
+    bestEl.textContent=best;
+  }
+
+  // --- game flow --------------------------------------------------------
+  function init(){
+    g=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+    buildBoard();
+    over=false; busy=false;
+    overlay.classList.remove("show");
+    updateScores();
+    turn=firstPlayer;
+    if(turn===AI){ busy=true; setHint("AI 선공 · <b>생각 중…</b>"); aiTurn(); }
+    else setHint("열을 눌러 떨어뜨려라");
+  }
+
+  function humanDrop(c){
+    if(busy || over || turn!==HUMAN) return;
+    const r=landingRow(g,c);
+    if(r<0) return;                 // column full
+    g[r][c]=HUMAN;
+    busy=true;
+    dropDisc(r,c,HUMAN, ()=>afterMove(r,c,HUMAN));
+  }
+
+  function aiTurn(){
+    setHint("AI · <b>생각 중…</b>");
+    // defer so the hint paints before the synchronous search
+    setTimeout(()=>{
+      const c=aiMove();
+      const r=landingRow(g,c);
+      if(r<0){ // safety: board full
+        finish(0); return;
+      }
+      g[r][c]=AI;
+      dropDisc(r,c,AI, ()=>afterMove(r,c,AI));
+    }, 230);
+  }
+
+  function afterMove(r,c,p){
+    const line=winLineAt(g,r,c,p);
+    if(line){ highlight(line); busy=false; finish(p); return; }
+    if(isFull(g)){ busy=false; finish(0); return; }
+    if(p===HUMAN){ turn=AI; aiTurn(); }      // stay busy through AI
+    else { turn=HUMAN; busy=false; setHint("네 차례 · 열을 눌러라"); }
+  }
+
+  function finish(winner){
+    over=true;
+    if(winner===HUMAN){
+      streak+=1;
+      const wasBest = streak>best;
+      if(wasBest){ best=streak; localStorage.setItem(BEST_KEY,String(best)); }
+      updateScores();
+      overMsg.innerHTML=`이겼다 · <b>${streak}</b>연승`;
+      overSmall.textContent = wasBest ? "최고 연승 경신! 한 판 더." : "좋다. 계속 밀어붙여.";
+    } else if(winner===AI){
+      streak=0; updateScores();
+      overMsg.innerHTML=`<b>AI</b> 승`;
+      overSmall.textContent="한 수 위였다. 연승 초기화. 다시.";
+    } else {
+      streak=0; updateScores();
+      overMsg.innerHTML=`비겼다`;
+      overSmall.textContent="판이 가득 찼다. 아무도 넷을 잇지 못했다.";
+    }
+    setHint("끝");
+    overlay.classList.add("show");
+  }
+
+  function restart(){
+    firstPlayer = (firstPlayer===HUMAN) ? AI : HUMAN; // alternate who starts
+    init();
+  }
+
+  document.getElementById("restart").addEventListener("click", restart);
+  document.getElementById("overRestart").addEventListener("click", restart);
+
+  init();
+})();
+</script>
+</body>
+</html>

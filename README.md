@@ -68,6 +68,22 @@ Reflex, memory, flow, raw skill, and pure puzzles — nerves batch 1 barely touc
 | 슬라이드·라이트아웃·미로 | 순서·논리·길을 **푼다** | puzzle (order / logic / spatial) |
 | 보석 맞추기 | 셋을 맞춰 **연쇄**로 터뜨린다 | mastery ⊗ cascade |
 
+## Batch 3 — new genres
+
+Cards, AI opponents, aiming, and arcade survival — whole genres batch 1–2 didn't touch:
+
+| game | essence (one line) | nerve |
+|---|---|---|
+| 블랙잭 | 21에 가깝게 — 버스트 직전의 욕심 | risk ⊗ count |
+| 사목 / 오델로 | AI 상대로 **잇고 / 뒤집어** 이긴다 | strategy ⊗ foresight / flip |
+| 스도쿠 / 노노그램 / 행맨 | 논리·그림·단어를 **추리**한다 | deduction (logic / image / word) |
+| 포격 | 각도·힘·바람을 읽어 **맞힌다** | aim ⊗ physics |
+| 소행성·인베이더·개구리·퐁 | 돌고·막고·건너고·받아쳐 **살아남는다** | arcade (survival / defense / crossing / reflex) |
+| 슬롯머신 | 돌리고 멈춘다 — 변동 보상의 중독 | luck ⊗ jackpot |
+
+Strategy games (사목/오델로) run real alpha-beta minimax AI; sudoku puzzles are
+generated with a verified unique solution. Catalog is now **39 games**.
+
 More batches to come — each adds a few essences across the nerve space.
 
 ## License

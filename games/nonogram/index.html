@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>노노그램 · Picross</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12;
+    --cw:54px; --ch:62px;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:6px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 10px;text-align:center;min-width:62px}
+  .box .lbl{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:19px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px}
+  .hint{font-size:12px;color:var(--muted);line-height:1.4}
+  .btns{display:flex;gap:8px;flex:none}
+  .restart,.mode{font-weight:800;border:none;padding:8px 14px;border-radius:22px;font-size:13px;cursor:pointer;font-family:inherit}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a}
+  .mode{background:var(--panel);border:1px solid var(--line);color:var(--ink)}
+  .mode.markmode{background:linear-gradient(#46382a,#322619);border-color:#5a4630;color:var(--amber)}
+  .restart:active,.mode:active{transform:scale(.96)}
+
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;padding:8px;overflow:hidden}
+  .grid{display:grid;grid-template-columns:var(--cw) repeat(10,1fr);touch-action:none}
+  .corner{width:var(--cw);height:var(--ch)}
+  .colclue{height:var(--ch);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+    gap:0;padding-bottom:5px;font-size:12.5px;font-weight:700;color:var(--muted);
+    font-variant-numeric:tabular-nums;line-height:1.18}
+  .colclue.g5{box-shadow:inset 2px 0 0 rgba(255,178,84,.18)}
+  .colclue.done{color:#5d5142}
+  .rowclue{width:var(--cw);display:flex;flex-direction:row;align-items:center;justify-content:flex-end;
+    gap:6px;padding-right:7px;font-size:12.5px;font-weight:700;color:var(--muted);
+    font-variant-numeric:tabular-nums}
+  .rowclue.g5{box-shadow:inset 0 2px 0 rgba(255,178,84,.18)}
+  .rowclue.done{color:#5d5142}
+  .cell{position:relative;aspect-ratio:1/1;background:var(--cell);
+    border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+    cursor:pointer;touch-action:none}
+  .cell.t{border-top:1px solid var(--line)}
+  .cell.l{border-left:1px solid var(--line)}
+  .cell.g5l{border-left:2px solid rgba(255,178,84,.30)}
+  .cell.g5t{border-top:2px solid rgba(255,178,84,.30)}
+  .cell.fill{background:linear-gradient(150deg,#ffc879,#ef8742)}
+  .cell.x::before{content:"";position:absolute;inset:32%;
+    background:
+      linear-gradient(45deg,transparent 43%,var(--muted) 43%,var(--muted) 57%,transparent 57%),
+      linear-gradient(-45deg,transparent 43%,var(--muted) 43%,var(--muted) 57%,transparent 57%)}
+  .cell.bad{animation:bad .4s ease}
+  @keyframes bad{0%,100%{background:var(--cell)}30%{background:#7d2c20}}
+
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.9);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:23px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+  @media (max-width:400px){:root{--cw:44px;--ch:54px} .colclue,.rowclue{font-size:11px}}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">노노그램<span class="ref">숫자 힌트로 숨은 그림을 채운다 · Picross</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">시간</div><div class="val" id="time">0:00</div></div>
+      <div class="box"><div class="lbl">실수</div><div class="val" id="miss">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">—</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">좌클릭 칠 · 우클릭 X<br>모바일은 모드 전환</div>
+    <div class="btns">
+      <button class="mode" id="mode">✏️ 칠하기</button>
+      <button class="restart" id="restart">다시</button>
+    </div>
+  </div>
+
+  <div class="board" id="board">
+    <div class="grid" id="grid"></div>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">행·열의 숫자는 연속으로 칠해진 칸 묶음의 길이. 숫자대로 채우면 그림이 드러난다.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const N = 10;
+  const BEST_KEY = "funlab:nonogram:best";
+
+  // --- picture library: 10 rows of 10 chars, '#' = filled ---------------
+  const PICTURES = [
+    { name:"하트", rows:[
+      "...####...",
+      ".########.",
+      "##########",
+      "##########",
+      "##########",
+      ".########.",
+      "..######..",
+      "...####...",
+      "....##....",
+      ".........." ]},
+    { name:"웃는 얼굴", rows:[
+      "...####...",
+      ".########.",
+      "##..##..##",
+      "##..##..##",
+      "##########",
+      "##########",
+      "##......##",
+      "##########",
+      ".########.",
+      "...####..." ]},
+    { name:"집", rows:[
+      "....##....",
+      "...####...",
+      "..######..",
+      ".########.",
+      "##########",
+      ".########.",
+      ".########.",
+      ".##....##.",
+      ".##....##.",
+      ".##....##." ]},
+    { name:"나무", rows:[
+      "....##....",
+      "...####...",
+      "..######..",
+      ".########.",
+      "##########",
+      "..######..",
+      ".########.",
+      "##########",
+      "....##....",
+      "....##...." ]},
+    { name:"화살표", rows:[
+      "....##....",
+      "...####...",
+      "..######..",
+      ".########.",
+      "##########",
+      "....##....",
+      "....##....",
+      "....##....",
+      "....##....",
+      "....##...." ]},
+    { name:"머그컵", rows:[
+      "..........",
+      ".######...",
+      ".######.#.",
+      ".######.#.",
+      ".######.#.",
+      ".######...",
+      ".######...",
+      "..######..",
+      "..........",
+      ".........." ]},
+    { name:"배", rows:[
+      "..........",
+      "....##....",
+      "....##....",
+      "....##....",
+      "##########",
+      ".########.",
+      ".########.",
+      "..######..",
+      "..........",
+      ".........." ]},
+    { name:"다이아", rows:[
+      "....##....",
+      "...####...",
+      "..######..",
+      ".########.",
+      "##########",
+      "##########",
+      ".########.",
+      "..######..",
+      "...####...",
+      "....##...." ]}
+  ];
+
+  // --- elements ---------------------------------------------------------
+  const gridEl   = document.getElementById("grid");
+  const boardEl  = document.getElementById("board");
+  const timeEl   = document.getElementById("time");
+  const missEl   = document.getElementById("miss");
+  const bestEl   = document.getElementById("best");
+  const modeBtn  = document.getElementById("mode");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+
+  // --- state ------------------------------------------------------------
+  let target;        // boolean[N][N]
+  let state;         // 0 empty | 1 fill | 2 x
+  let rowClues, colClues;
+  let targetCount;   // total filled cells in solution
+  let filledCount;   // current correct fills
+  let misses;
+  let picName;
+  let mode;          // 'fill' | 'mark'
+  let solved;
+  let startTime, timerId;
+  let dragging, dragAction;
+  let cellEls, rowClueEls, colClueEls;
+  let best = readBest();
+
+  function readBest(){
+    const v = parseInt(localStorage.getItem(BEST_KEY) || "", 10);
+    return Number.isFinite(v) && v > 0 ? v : null;
+  }
+  function fmt(s){
+    s = Math.max(0, Math.floor(s));
+    const m = Math.floor(s/60), ss = s%60;
+    return m + ":" + String(ss).padStart(2,"0");
+  }
+
+  function runs(line){ // line = boolean[]; returns array of run lengths, [0] if none
+    const out = []; let c = 0;
+    for(const v of line){ if(v) c++; else if(c>0){ out.push(c); c=0; } }
+    if(c>0) out.push(c);
+    return out.length ? out : [0];
+  }
+  function eq(a,b){ if(a.length!==b.length) return false; for(let i=0;i<a.length;i++) if(a[i]!==b[i]) return false; return true; }
+
+  // --- build a new puzzle ----------------------------------------------
+  function pick(){
+    let i = Math.floor(Math.random()*PICTURES.length);
+    if(PICTURES[i].name === picName && PICTURES.length>1) i = (i+1)%PICTURES.length;
+    return PICTURES[i];
+  }
+
+  function init(){
+    const p = pick();
+    picName = p.name;
+    target = p.rows.map(r => r.split("").map(ch => ch === "#"));
+    state  = Array.from({length:N}, () => Array(N).fill(0));
+    targetCount = 0;
+    for(let r=0;r<N;r++) for(let c=0;c<N;c++) if(target[r][c]) targetCount++;
+    filledCount = 0;
+    misses = 0;
+    solved = false;
+    mode = "fill";
+    dragging = false;
+
+    rowClues = target.map(row => runs(row));
+    colClues = [];
+    for(let c=0;c<N;c++){
+      const col = [];
+      for(let r=0;r<N;r++) col.push(target[r][c]);
+      colClues.push(runs(col));
+    }
+
+    buildGrid();
+    updateMode();
+    missEl.textContent = "0";
+    timeEl.textContent = "0:00";
+    bestEl.textContent = best ? fmt(best) : "—";
+    overlay.classList.remove("show");
+
+    if(timerId){ clearInterval(timerId); timerId = null; }
+    startTime = null;
+    refreshClues();
+  }
+
+  function buildGrid(){
+    gridEl.innerHTML = "";
+    cellEls = Array.from({length:N}, () => Array(N));
+    rowClueEls = []; colClueEls = [];
+
+    // header row: corner + column clues
+    const corner = document.createElement("div");
+    corner.className = "corner";
+    gridEl.appendChild(corner);
+    for(let c=0;c<N;c++){
+      const cc = document.createElement("div");
+      cc.className = "colclue" + (c%5===0 ? " g5" : "");
+      cc.innerHTML = colClues[c].map(n => "<span>"+n+"</span>").join("");
+      gridEl.appendChild(cc);
+      colClueEls.push(cc);
+    }
+    // body rows
+    for(let r=0;r<N;r++){
+      const rc = document.createElement("div");
+      rc.className = "rowclue" + (r%5===0 ? " g5" : "");
+      rc.innerHTML = rowClues[r].map(n => "<span>"+n+"</span>").join("");
+      gridEl.appendChild(rc);
+      rowClueEls.push(rc);
+      for(let c=0;c<N;c++){
+        const cell = document.createElement("div");
+        let cls = "cell";
+        if(r===0) cls += " t";
+        if(c===0) cls += " l";
+        if(c%5===0) cls += " g5l";
+        if(r%5===0) cls += " g5t";
+        cell.className = cls;
+        cell.dataset.r = r; cell.dataset.c = c;
+        gridEl.appendChild(cell);
+        cellEls[r][c] = cell;
+      }
+    }
+  }
+
+  function paint(r,c){
+    const cell = cellEls[r][c];
+    const s = state[r][c];
+    cell.classList.toggle("fill", s===1);
+    cell.classList.toggle("x", s===2);
+  }
+
+  function refreshClues(){
+    for(let r=0;r<N;r++){
+      const line = state[r].map(s => s===1);
+      rowClueEls[r].classList.toggle("done", eq(runs(line), rowClues[r]));
+    }
+    for(let c=0;c<N;c++){
+      const line = [];
+      for(let r=0;r<N;r++) line.push(state[r][c]===1);
+      colClueEls[c].classList.toggle("done", eq(runs(line), colClues[c]));
+    }
+  }
+
+  function startTimer(){
+    if(startTime !== null) return;
+    startTime = performance.now();
+    timerId = setInterval(()=>{
+      timeEl.textContent = fmt((performance.now()-startTime)/1000);
+    }, 250);
+  }
+
+  function flashBad(r,c){
+    const cell = cellEls[r][c];
+    cell.classList.remove("bad");
+    void cell.offsetWidth;
+    cell.classList.add("bad");
+  }
+
+  // apply a locked action to a cell; returns true if something changed
+  function apply(r,c,action){
+    const s = state[r][c];
+    if(action === "fillTry"){
+      if(s === 1) return false;
+      if(target[r][c]){
+        state[r][c] = 1; filledCount++; paint(r,c); return true;
+      } else {
+        if(s !== 2){ misses++; missEl.textContent = misses; }
+        state[r][c] = 2; paint(r,c); flashBad(r,c); return true;
+      }
+    } else if(action === "clear"){
+      if(s !== 1) return false;
+      state[r][c] = 0; filledCount--; paint(r,c); return true;
+    } else if(action === "mark"){
+      if(s !== 0) return false;
+      state[r][c] = 2; paint(r,c); return true;
+    } else if(action === "unmark"){
+      if(s !== 2) return false;
+      state[r][c] = 0; paint(r,c); return true;
+    }
+    return false;
+  }
+
+  function decideAction(r,c,secondary){
+    const s = state[r][c];
+    if(secondary){
+      if(s === 1) return null;        // can't X a filled cell
+      return s === 2 ? "unmark" : "mark";
+    }
+    return s === 1 ? "clear" : "fillTry";
+  }
+
+  function cellAt(x,y){
+    const el = document.elementFromPoint(x,y);
+    if(!el || !el.classList || !el.classList.contains("cell")) return null;
+    return { r:+el.dataset.r, c:+el.dataset.c };
+  }
+
+  function doAt(r,c){
+    if(apply(r,c,dragAction)){
+      startTimer();
+      refreshClues();
+      checkWin();
+    }
+  }
+
+  function checkWin(){
+    if(filledCount !== targetCount) return;
+    solved = true;
+    if(timerId){ clearInterval(timerId); timerId = null; }
+    const elapsed = startTime !== null ? (performance.now()-startTime)/1000 : 0;
+    const secs = Math.max(1, Math.round(elapsed));
+    timeEl.textContent = fmt(secs);
+    let record = false;
+    if(best === null || secs < best){ best = secs; record = true; localStorage.setItem(BEST_KEY, String(best)); bestEl.textContent = fmt(best); }
+    overMsg.innerHTML = `<b>${picName}</b> 완성!`;
+    overSmall.textContent = (record ? "최단 기록! " : "") + fmt(secs) + " · 실수 " + misses;
+    overlay.classList.add("show");
+  }
+
+  // --- mode toggle (mobile + desktop) ----------------------------------
+  function updateMode(){
+    if(mode === "fill"){ modeBtn.textContent = "✏️ 칠하기"; modeBtn.classList.remove("markmode"); }
+    else { modeBtn.textContent = "✕ X 표시"; modeBtn.classList.add("markmode"); }
+  }
+  modeBtn.addEventListener("click", ()=>{ mode = mode === "fill" ? "mark" : "fill"; updateMode(); });
+
+  // --- pointer input (click + drag, mouse + touch) ----------------------
+  gridEl.addEventListener("contextmenu", e => e.preventDefault());
+
+  gridEl.addEventListener("pointerdown", e => {
+    if(solved) return;
+    const hit = cellAt(e.clientX, e.clientY);
+    if(!hit) return;
+    e.preventDefault();
+    const secondary = e.button === 2 || mode === "mark";
+    const action = decideAction(hit.r, hit.c, secondary);
+    if(!action) return;
+    dragging = true;
+    dragAction = action;
+    doAt(hit.r, hit.c);
+  });
+
+  gridEl.addEventListener("pointermove", e => {
+    if(!dragging || solved) return;
+    e.preventDefault();
+    const hit = cellAt(e.clientX, e.clientY);
+    if(hit) doAt(hit.r, hit.c);
+  });
+
+  function endDrag(){ dragging = false; }
+  window.addEventListener("pointerup", endDrag);
+  window.addEventListener("pointercancel", endDrag);
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+})();
+</script>
+</body>
+</html>

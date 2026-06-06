@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>퐁 · Pong</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 12px;text-align:center;min-width:54px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .box.me .val{color:var(--amber)}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:1/1;touch-action:none;overflow:hidden;cursor:none}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">퐁<span class="ref">받아쳐 넘긴다 — 먼저 놓치면 진다 · Pong</span></div>
+    <div class="scores">
+      <div class="box me"><div class="lbl">나</div><div class="val" id="meScore">0</div></div>
+      <div class="box"><div class="lbl">AI</div><div class="val" id="aiScore">0</div></div>
+      <div class="box"><div class="lbl">연승</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">마우스·드래그 / ↑↓</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <canvas id="cv"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">패들 가장자리로 받을수록 각이 선다. 랠리가 길어질수록 공이 빨라진다.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // --- constants (all geometry as fractions of board width W) -----------
+  const BEST_KEY  = "funlab:pong:best";
+  const WIN_SCORE = 7;
+  const PADDLE_W  = 0.022;
+  const PADDLE_H  = 0.165;
+  const BALL_R    = 0.017;
+  const MARGIN    = 0.035;           // paddle distance from side wall
+  const BASE_SPD  = 0.78;            // ball speed (fraction/sec) at serve
+  const MAX_SPD   = 1.55;            // capped ball speed
+  const VOLLEY    = 1.045;           // speed multiplier per paddle hit
+  const MAX_ANGLE = Math.PI/3;       // 60° max deflection off paddle edge
+  const AI_SPD    = 0.62;            // AI paddle max speed (fraction/sec)
+  const KEY_SPD   = 1.25;            // keyboard paddle speed (fraction/sec)
+  const SERVE_GAP = 0.7;            // seconds of pause after a point
+
+  const meX = MARGIN;                // left paddle (player) left edge
+  const aiX = 1 - MARGIN - PADDLE_W; // right paddle (AI) left edge
+
+  const boardEl = document.getElementById("board");
+  const cv      = document.getElementById("cv");
+  const ctx     = cv.getContext("2d");
+  const meScoreEl = document.getElementById("meScore");
+  const aiScoreEl = document.getElementById("aiScore");
+  const bestEl    = document.getElementById("best");
+  const overlay   = document.getElementById("overlay");
+  const overMsg   = document.getElementById("overMsg");
+  const overSmall = document.getElementById("overSmall");
+
+  // --- pixel sizing (retina + responsive square board) ------------------
+  let W = 0;
+  function resize(){
+    const rect = boardEl.getBoundingClientRect();
+    const dpr  = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const size = Math.round(rect.width * dpr);
+    cv.width  = size;
+    cv.height = size;
+    W = size;
+  }
+  window.addEventListener("resize", resize);
+
+  // --- state ------------------------------------------------------------
+  let meY, aiY;        // paddle centers (fraction, 0..1)
+  let ball;            // {x,y,vx,vy}
+  let meScore, aiScore, best, streak;
+  let state;           // 'ready' | 'playing' | 'serving' | 'over'
+  let serveTimer;      // seconds left before next serve
+  let serveDir;        // +1 toward AI, -1 toward player
+  let keyUp, keyDown;  // keyboard hold flags
+  let pointerY = null; // last pointer/touch target (fraction), null = none
+  let last;            // timestamp of previous frame
+
+  best   = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+  streak = 0;
+
+  function clamp(v, lo, hi){ return v < lo ? lo : (v > hi ? hi : v); }
+
+  function init(){
+    resize();
+    meY = 0.5; aiY = 0.5;
+    meScore = 0; aiScore = 0;
+    keyUp = false; keyDown = false;
+    pointerY = null;
+    state = "ready";
+    serveTimer = 0;
+    serveDir = Math.random() < 0.5 ? 1 : -1;
+    centerBall();
+    overlay.classList.remove("show");
+    updateScores();
+    last = performance.now();
+  }
+
+  function centerBall(){
+    ball = { x:0.5, y:0.5, vx:0, vy:0 };
+  }
+
+  function launch(){
+    // serve toward serveDir with a mild random vertical angle
+    const ang = (Math.random()*2 - 1) * (MAX_ANGLE*0.5);
+    ball.x = 0.5; ball.y = 0.5;
+    ball.vx = serveDir * BASE_SPD * Math.cos(ang);
+    ball.vy = BASE_SPD * Math.sin(ang);
+  }
+
+  function updateScores(){
+    meScoreEl.textContent = meScore;
+    aiScoreEl.textContent = aiScore;
+    bestEl.textContent = best;
+  }
+
+  // --- point / match flow ----------------------------------------------
+  function scorePoint(who){            // 'me' or 'ai'
+    if(who === "me") meScore++; else aiScore++;
+    updateScores();
+    if(meScore >= WIN_SCORE){ finish(true); return; }
+    if(aiScore >= WIN_SCORE){ finish(false); return; }
+    // loser serves next (toward the player who just scored's opponent):
+    // ball goes toward whoever conceded so they get the first touch.
+    serveDir = who === "me" ? -1 : 1;
+    centerBall();
+    state = "serving";
+    serveTimer = SERVE_GAP;
+  }
+
+  function finish(won){
+    state = "over";
+    if(won){
+      streak++;
+      if(streak > best){ best = streak; localStorage.setItem(BEST_KEY, String(best)); }
+      updateScores();
+      overMsg.innerHTML = `승리 · <b>${meScore}</b> : ${aiScore}`;
+      overSmall.textContent = streak >= best && streak > 1
+        ? `최고 ${streak}연승 경신!` : `${streak}연승 중. 한 판 더.`;
+    } else {
+      const had = streak;
+      streak = 0;
+      overMsg.innerHTML = `패배 · ${meScore} : <b>${aiScore}</b>`;
+      overSmall.textContent = had > 0
+        ? `${had}연승이 여기서 끊겼다. 다시.` : "AI가 한 수 위였다. 다시.";
+    }
+    overlay.classList.add("show");
+  }
+
+  // --- simulation -------------------------------------------------------
+  function physics(dt){
+    // player paddle: keyboard moves, else follow pointer if present
+    if(keyUp || keyDown){
+      const v = (keyDown ? 1 : 0) - (keyUp ? 1 : 0);
+      meY = clamp(meY + v * KEY_SPD * dt, PADDLE_H/2, 1 - PADDLE_H/2);
+    } else if(pointerY !== null){
+      meY = clamp(pointerY, PADDLE_H/2, 1 - PADDLE_H/2);
+    }
+
+    // AI paddle: chase ball with a capped speed + slight lag, only commits
+    // once the ball is heading its way. Aim a touch off-center so it's beatable.
+    let target = 0.5;
+    if(ball.vx > 0){
+      target = ball.y + (aiY < ball.y ? 1 : -1) * 0.02; // small overshoot/error
+    }
+    const diff = target - aiY;
+    const move = clamp(diff, -AI_SPD*dt, AI_SPD*dt);
+    aiY = clamp(aiY + move, PADDLE_H/2, 1 - PADDLE_H/2);
+
+    // ball integrate
+    ball.x += ball.vx * dt;
+    ball.y += ball.vy * dt;
+
+    // top / bottom walls
+    if(ball.y < BALL_R){ ball.y = BALL_R; ball.vy = Math.abs(ball.vy); }
+    else if(ball.y > 1 - BALL_R){ ball.y = 1 - BALL_R; ball.vy = -Math.abs(ball.vy); }
+
+    // player paddle (left): ball moving left and overlapping paddle plane
+    if(ball.vx < 0 && ball.x - BALL_R <= meX + PADDLE_W && ball.x - BALL_R >= meX - 0.05){
+      if(Math.abs(ball.y - meY) <= PADDLE_H/2 + BALL_R){
+        bounce(meY, +1);
+        ball.x = meX + PADDLE_W + BALL_R;
+      }
+    }
+    // AI paddle (right)
+    if(ball.vx > 0 && ball.x + BALL_R >= aiX && ball.x + BALL_R <= aiX + PADDLE_W + 0.05){
+      if(Math.abs(ball.y - aiY) <= PADDLE_H/2 + BALL_R){
+        bounce(aiY, -1);
+        ball.x = aiX - BALL_R;
+      }
+    }
+
+    // scoring (ball fully past a side)
+    if(ball.x < -BALL_R){ scorePoint("ai"); }
+    else if(ball.x > 1 + BALL_R){ scorePoint("me"); }
+  }
+
+  function bounce(paddleCenter, dir){   // dir +1 toward AI, -1 toward player
+    const offset = clamp((ball.y - paddleCenter) / (PADDLE_H/2), -1, 1);
+    let spd = Math.hypot(ball.vx, ball.vy) * VOLLEY;
+    if(spd > MAX_SPD) spd = MAX_SPD;
+    const ang = offset * MAX_ANGLE;
+    ball.vx = dir * spd * Math.cos(ang);
+    ball.vy = spd * Math.sin(ang);
+  }
+
+  // --- rendering --------------------------------------------------------
+  function render(){
+    ctx.clearRect(0,0,W,W);
+
+    // center dashed line
+    ctx.strokeStyle = "rgba(169,151,126,0.35)";
+    ctx.lineWidth = Math.max(1, W*0.006);
+    ctx.setLineDash([W*0.03, W*0.03]);
+    ctx.beginPath();
+    ctx.moveTo(W/2, 0); ctx.lineTo(W/2, W);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // paddles
+    drawPaddle(meX, meY, "#ffc879");                 // player — bright amber
+    drawPaddle(aiX, aiY, "#c98a4a");                 // AI — dimmer ember
+
+    // ball (warm glow)
+    const bx = ball.x*W, by = ball.y*W, r = BALL_R*W;
+    ctx.save();
+    ctx.shadowColor = "rgba(255,177,84,0.85)";
+    ctx.shadowBlur  = r*1.6;
+    const g = ctx.createRadialGradient(bx-r*0.3, by-r*0.3, r*0.1, bx, by, r);
+    g.addColorStop(0, "#ffe7c2");
+    g.addColorStop(1, "#ff9e3d");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(bx, by, r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    // serve countdown hint
+    if(state === "serving"){
+      ctx.fillStyle = "rgba(246,234,216,0.85)";
+      ctx.font = `800 ${Math.round(W*0.09)}px "Apple SD Gothic Neo",system-ui,sans-serif`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(String(Math.ceil(serveTimer)), W*0.5, W*0.5);
+    } else if(state === "ready"){
+      ctx.fillStyle = "rgba(169,151,126,0.9)";
+      ctx.font = `700 ${Math.round(W*0.045)}px "Apple SD Gothic Neo",system-ui,sans-serif`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("움직이면 시작", W*0.5, W*0.62);
+    }
+  }
+
+  function drawPaddle(x, cy, color){
+    const px = x*W, py = (cy - PADDLE_H/2)*W;
+    const pw = PADDLE_W*W, ph = PADDLE_H*W;
+    const rad = pw*0.5;
+    ctx.fillStyle = color;
+    roundRect(ctx, px, py, pw, ph, rad);
+    ctx.fill();
+  }
+
+  function roundRect(c, x, y, w, h, r){
+    r = Math.min(r, w/2, h/2);
+    c.beginPath();
+    c.moveTo(x+r, y);
+    c.arcTo(x+w, y,   x+w, y+h, r);
+    c.arcTo(x+w, y+h, x,   y+h, r);
+    c.arcTo(x,   y+h, x,   y,   r);
+    c.arcTo(x,   y,   x+w, y,   r);
+    c.closePath();
+  }
+
+  // --- main loop --------------------------------------------------------
+  function frame(now){
+    let dt = (now - last) / 1000;
+    last = now;
+    if(dt > 0.05) dt = 0.05;          // clamp big gaps (tab switch)
+
+    if(state === "playing"){
+      physics(dt);
+    } else if(state === "serving"){
+      // let player keep positioning paddle during the pause
+      if(keyUp || keyDown){
+        const v = (keyDown ? 1 : 0) - (keyUp ? 1 : 0);
+        meY = clamp(meY + v * KEY_SPD * dt, PADDLE_H/2, 1 - PADDLE_H/2);
+      } else if(pointerY !== null){
+        meY = clamp(pointerY, PADDLE_H/2, 1 - PADDLE_H/2);
+      }
+      serveTimer -= dt;
+      if(serveTimer <= 0){ launch(); state = "playing"; }
+    }
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  function beginIfReady(){
+    if(state === "ready"){ launch(); state = "playing"; }
+  }
+
+  // --- input ------------------------------------------------------------
+  window.addEventListener("keydown", e=>{
+    if(e.key === "ArrowUp" || e.key === "w" || e.key === "W" || e.key === "k"){
+      e.preventDefault(); keyUp = true; beginIfReady();
+    } else if(e.key === "ArrowDown" || e.key === "s" || e.key === "S" || e.key === "j"){
+      e.preventDefault(); keyDown = true; beginIfReady();
+    }
+  });
+  window.addEventListener("keyup", e=>{
+    if(e.key === "ArrowUp" || e.key === "w" || e.key === "W" || e.key === "k") keyUp = false;
+    else if(e.key === "ArrowDown" || e.key === "s" || e.key === "S" || e.key === "j") keyDown = false;
+  });
+
+  function relY(clientY){
+    const rect = boardEl.getBoundingClientRect();
+    return clamp((clientY - rect.top) / rect.height, 0, 1);
+  }
+
+  // mouse (desktop): move anywhere over the board to aim the paddle
+  boardEl.addEventListener("mousemove", e=>{
+    pointerY = relY(e.clientY);
+    beginIfReady();
+  });
+  boardEl.addEventListener("mouseleave", ()=>{ /* keep last paddle pos */ });
+
+  // touch (mobile): drag to control the paddle
+  function onTouch(e){
+    const t = e.changedTouches[0];
+    if(!t) return;
+    pointerY = relY(t.clientY);
+    beginIfReady();
+  }
+  boardEl.addEventListener("touchstart", e=>{ onTouch(e); }, {passive:true});
+  boardEl.addEventListener("touchmove",  e=>{ onTouch(e); }, {passive:true});
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

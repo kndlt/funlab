@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>개구리 · Frogger</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 36px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:12px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:7px 12px;text-align:center;min-width:58px}
+  .box .lbl{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:20px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .meter{height:7px;border-radius:6px;background:#241c12;border:1px solid var(--line);overflow:hidden;margin-bottom:11px}
+  .meter-fill{height:100%;width:100%;border-radius:6px;
+    background:linear-gradient(90deg,#ff9e3d,#ffd07a);transition:none}
+  .meter-fill.low{background:linear-gradient(90deg,#e8503d,#ff8a5a)}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:9/11;touch-action:none;overflow:hidden}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .dpad{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);
+    gap:8px;width:200px;margin:14px auto 0}
+  .dpad button{background:var(--panel);border:1px solid var(--line);color:var(--amber);
+    font-size:20px;border-radius:12px;padding:12px 0;cursor:pointer;font-family:inherit;font-weight:800}
+  .dpad button:active{background:#2a2114;transform:scale(.95)}
+  .dpad .up{grid-column:2;grid-row:1}
+  .dpad .left{grid-column:1;grid-row:2}
+  .dpad .down{grid-column:2;grid-row:2}
+  .dpad .right{grid-column:3;grid-row:2}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">개구리<span class="ref">차와 강을 건너 반대편에 닿는다 · Frogger</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">점수</div><div class="val" id="score">0</div></div>
+      <div class="box"><div class="lbl">목숨</div><div class="val" id="lives">3</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="meter"><div class="meter-fill" id="timer"></div></div>
+
+  <div class="barline">
+    <div class="hint">방향키 / WASD / 스와이프</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <canvas id="cv"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="dpad">
+    <button class="up"    data-d="up"    aria-label="위">▲</button>
+    <button class="left"  data-d="left"  aria-label="왼쪽">◀</button>
+    <button class="down"  data-d="down"  aria-label="아래">▼</button>
+    <button class="right" data-d="right" aria-label="오른쪽">▶</button>
+  </div>
+
+  <div class="foot">차는 피하고, 통나무·거북은 올라타라. 물에 빠지면 끝. 둥지 다섯을 다 채우면 보너스.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // --- layout -----------------------------------------------------------
+  const COLS = 9;
+  const ROWS = 11;            // row 0 = goal (top), row ROWS-1 = start (bottom)
+  const SLOTS = [0,2,4,6,8];  // goal-nest columns (even); odd cols are walls
+  const START_COL = 4;
+  const TIME_LIMIT = 30;      // seconds per crossing
+  const BEST_KEY = "funlab:frogger:best";
+
+  // lane templates, top -> bottom. dir +1 = rightward, -1 = leftward.
+  const LANE_DEFS = [
+    {type:"goal"},
+    {type:"river", dir: 1, speed:1.5, len:3, gap:3.0, kind:"log"},
+    {type:"river", dir:-1, speed:2.3, len:2, gap:3.0, kind:"turtle"},
+    {type:"river", dir: 1, speed:1.9, len:4, gap:4.0, kind:"log"},
+    {type:"river", dir:-1, speed:1.4, len:3, gap:3.5, kind:"log"},
+    {type:"safe"},
+    {type:"road", dir:-1, speed:1.9, len:2, gap:4.0, kind:"truck"},
+    {type:"road", dir: 1, speed:2.7, len:1, gap:3.0, kind:"car"},
+    {type:"road", dir:-1, speed:2.3, len:1, gap:3.5, kind:"car"},
+    {type:"road", dir: 1, speed:1.6, len:2, gap:4.0, kind:"truck"},
+    {type:"safe"}
+  ];
+  const CAR_COLORS = ["#ffb154","#ff7d4d","#f2c14e","#ff9e3d","#e8633d"];
+
+  // --- elements ---------------------------------------------------------
+  const boardEl  = document.getElementById("board");
+  const cv       = document.getElementById("cv");
+  const ctx      = cv.getContext("2d");
+  const scoreEl  = document.getElementById("score");
+  const livesEl  = document.getElementById("lives");
+  const bestEl   = document.getElementById("best");
+  const timerEl  = document.getElementById("timer");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+
+  // --- pixel sizing -----------------------------------------------------
+  let cw = 0, ch = 0;
+  function resize(){
+    const rect = boardEl.getBoundingClientRect();
+    const dpr  = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    cv.width  = Math.round(rect.width  * dpr);
+    cv.height = Math.round(rect.height * dpr);
+    cw = cv.width  / COLS;
+    ch = cv.height / ROWS;
+  }
+  window.addEventListener("resize", resize);
+
+  // --- state ------------------------------------------------------------
+  let lanes;
+  let fx, fy;               // frog cell (fx float on river, int elsewhere)
+  let displayX, displayY;   // eased render position
+  let score, lives, best;
+  let filled;               // Set of filled goal columns
+  let dm;                   // difficulty multiplier
+  let timeLeft;
+  let state;                // 'ready' | 'playing' | 'over'
+  let hopStart = -1e9;      // ts of last hop (for bob)
+  let deathFlash = -1e9;
+  let lastT;
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  function clamp(v,a,b){ return v < a ? a : (v > b ? b : v); }
+
+  function buildLanes(){
+    lanes = LANE_DEFS.map(def=>{
+      const lane = Object.assign({}, def);
+      if(def.type === "road" || def.type === "river"){
+        const spacing = def.len + def.gap;
+        const low  = -def.len - 1;
+        const high = COLS + 1;
+        const count = Math.ceil((high - low) / spacing) + 1;
+        lane.spacing = spacing;
+        lane.T = count * spacing;
+        lane.low = low;
+        lane.high = high;
+        lane.entities = [];
+        for(let i=0;i<count;i++) lane.entities.push({ x: low + i*spacing });
+        lane.submerged = false;
+      }
+      return lane;
+    });
+  }
+
+  function init(){
+    resize();
+    buildLanes();
+    score = 0;
+    lives = 3;
+    filled = new Set();
+    dm = 1;
+    state = "ready";
+    resetFrog();
+    displayX = fx; displayY = fy;
+    overlay.classList.remove("show");
+    updateScores();
+    lastT = performance.now();
+  }
+
+  function resetFrog(){
+    fx = START_COL;
+    fy = ROWS - 1;
+    timeLeft = TIME_LIMIT;
+  }
+
+  function updateScores(){
+    scoreEl.textContent = score;
+    livesEl.textContent = lives;
+    bestEl.textContent  = best;
+  }
+
+  // --- input ------------------------------------------------------------
+  function hop(dx, dy){
+    if(state === "over") return;
+    if(state === "ready"){ state = "playing"; lastT = performance.now(); }
+
+    if(dy === -1){
+      const ny = fy - 1;
+      if(ny < 0) return;
+      if(ny === 0){ resolveGoal(); return; }
+      fy = ny;
+    } else if(dy === 1){
+      fy = Math.min(ROWS - 1, fy + 1);
+    } else if(dx !== 0){
+      fx = clamp(fx + dx, 0, COLS - 1);
+    } else {
+      return;
+    }
+    // snap to grid on land; rivers keep the drift offset
+    if(lanes[fy].type !== "river") fx = clamp(Math.round(fx), 0, COLS - 1);
+    hopStart = performance.now();
+  }
+
+  function resolveGoal(){
+    const cx = fx + 0.5;
+    let hit = -1;
+    for(const c of SLOTS){ if(Math.abs(cx - (c + 0.5)) < 0.5){ hit = c; break; } }
+    if(hit < 0 || filled.has(hit)){ loseLife("둥지를 빗나갔다"); return; }
+
+    filled.add(hit);
+    const bonus = Math.max(0, Math.ceil(timeLeft));
+    score += 10 + bonus;
+    dm = Math.min(3.2, dm + 0.06);
+    if(filled.size === SLOTS.length){
+      score += 50;
+      filled.clear();
+      dm = Math.min(3.4, dm + 0.2);
+    }
+    if(score > best){ best = score; localStorage.setItem(BEST_KEY, String(best)); }
+    updateScores();
+    hopStart = performance.now();
+    resetFrog();
+  }
+
+  function loseLife(reason){
+    lives -= 1;
+    deathFlash = performance.now();
+    updateScores();
+    if(lives <= 0){ gameOver(reason); return; }
+    resetFrog();
+  }
+
+  function gameOver(reason){
+    state = "over";
+    overMsg.innerHTML = `게임 끝 · 점수 <b>${score}</b>`;
+    overSmall.textContent = score >= best && score > 0
+      ? "최고 기록! 더 멀리 갔다." : (reason || "끝났다") + ". 다시.";
+    overlay.classList.add("show");
+  }
+
+  // --- simulation -------------------------------------------------------
+  function updateLanes(dt, now){
+    for(const lane of lanes){
+      if(!lane.entities) continue;
+      const v = lane.dir * lane.speed * dm * dt;
+      for(const e of lane.entities){
+        e.x += v;
+        while(e.x > lane.high) e.x -= lane.T;
+        while(e.x < lane.low)  e.x += lane.T;
+      }
+      if(lane.kind === "turtle"){
+        const phase = now % 4200;
+        lane.submerged = phase > 3200;          // under water ~1s each cycle
+        lane.diving = phase > 2900;             // visual warning
+      }
+    }
+  }
+
+  function updateFrog(dt){
+    timeLeft -= dt;
+    if(timeLeft <= 0){ loseLife("시간 초과"); return; }
+
+    const lane = lanes[fy];
+    if(lane.type === "road"){
+      for(const e of lane.entities){
+        if(fx + 0.82 > e.x && fx + 0.18 < e.x + lane.len){ loseLife("차에 치였다"); return; }
+      }
+    } else if(lane.type === "river"){
+      let ride = null;
+      if(!(lane.kind === "turtle" && lane.submerged)){
+        const cx = fx + 0.5;
+        for(const e of lane.entities){
+          if(cx >= e.x && cx <= e.x + lane.len){ ride = e; break; }
+        }
+      }
+      if(!ride){ loseLife("물에 빠졌다"); return; }
+      fx += lane.dir * lane.speed * dm * dt;     // drift with the log
+      if(fx < -0.5 || fx > COLS - 0.5){ loseLife("떠내려갔다"); return; }
+    }
+  }
+
+  // --- rendering --------------------------------------------------------
+  function laneBg(lane){
+    switch(lane.type){
+      case "goal":  return "#163220";
+      case "safe":  return "#27401d";
+      case "road":  return "#1e1812";
+      case "river": return "#123038";
+    }
+  }
+
+  function render(now){
+    const W = cv.width, H = cv.height;
+    ctx.clearRect(0,0,W,H);
+
+    // lane backgrounds + textures
+    for(let r=0;r<ROWS;r++){
+      const lane = lanes[r], y = r*ch;
+      ctx.fillStyle = laneBg(lane);
+      ctx.fillRect(0, y, W, ch);
+      if(lane.type === "river"){
+        ctx.strokeStyle = "rgba(120,190,205,0.12)";
+        ctx.lineWidth = Math.max(1, ch*0.04);
+        for(let k=0;k<3;k++){
+          const wy = y + ch*(0.3 + k*0.25);
+          ctx.beginPath(); ctx.moveTo(0, wy); ctx.lineTo(W, wy); ctx.stroke();
+        }
+      } else if(lane.type === "road"){
+        ctx.fillStyle = "rgba(255,209,122,0.16)";
+        const dh = ch*0.06, dy = y + ch/2 - dh/2;
+        for(let c=0;c<COLS;c++){ ctx.fillRect((c+0.3)*cw, dy, cw*0.4, dh); }
+      }
+    }
+
+    // goal nests
+    for(const c of SLOTS){
+      const x = c*cw, y = 0;
+      ctx.fillStyle = "#0f2616";
+      roundRect(x + cw*0.12, y + ch*0.12, cw*0.76, ch*0.76, cw*0.22); ctx.fill();
+      if(filled.has(c)){
+        drawFrogShape(x + cw*0.5, y + ch*0.5, cw*0.62, 0, "#6f9c3a", "#24320f");
+      } else {
+        ctx.fillStyle = "#2c6b3a";
+        ctx.beginPath();
+        ctx.arc(x + cw*0.5, y + ch*0.5, cw*0.26, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    // entities
+    for(let r=0;r<ROWS;r++){
+      const lane = lanes[r];
+      if(!lane.entities) continue;
+      const y = r*ch;
+      for(let i=0;i<lane.entities.length;i++){
+        const e = lane.entities[i];
+        if(lane.type === "road") drawCar(e, lane, i, y);
+        else                     drawFloat(e, lane, y);
+      }
+    }
+
+    // frog
+    const bt = (now - hopStart) / 130;
+    const bob = bt < 1 ? -Math.sin(bt*Math.PI)*0.22 : 0;
+    drawFrogShape((displayX + 0.5)*cw, (displayY + 0.5 + bob)*ch, cw*0.78, fy, "#9bd14e", "#2c3a14");
+
+    // death flash
+    const df = (now - deathFlash) / 260;
+    if(df < 1){
+      ctx.fillStyle = `rgba(232,80,61,${0.4*(1-df)})`;
+      ctx.fillRect(0,0,W,H);
+    }
+  }
+
+  function drawCar(e, lane, i, y){
+    const x = e.x*cw, w = lane.len*cw, h = ch*0.7, yy = y + ch*0.15;
+    if(x + w < 0 || x > cv.width) return;
+    ctx.fillStyle = CAR_COLORS[i % CAR_COLORS.length];
+    roundRect(x + cw*0.08, yy, w - cw*0.16, h, ch*0.16); ctx.fill();
+    // windows
+    ctx.fillStyle = "rgba(20,17,13,0.55)";
+    const winW = cw*0.34;
+    const wx = lane.dir > 0 ? x + w - cw*0.16 - winW : x + cw*0.16;
+    roundRect(wx, yy + h*0.18, winW, h*0.5, ch*0.08); ctx.fill();
+  }
+
+  function drawFloat(e, lane, y){
+    const x = e.x*cw, w = lane.len*cw, yy = y + ch*0.14, h = ch*0.72;
+    if(x + w < 0 || x > cv.width) return;
+    if(lane.kind === "turtle"){
+      const submerged = lane.submerged;
+      const a = submerged ? 0.22 : (lane.diving ? 0.55 : 1);
+      ctx.globalAlpha = a;
+      const n = lane.len;
+      for(let k=0;k<n;k++){
+        const ccx = x + (k+0.5)*cw, ccy = y + ch*0.5, rr = Math.min(cw,ch)*0.32;
+        ctx.fillStyle = "#3f7d4a";
+        ctx.beginPath(); ctx.arc(ccx, ccy, rr, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = "#2c5a36";
+        ctx.beginPath(); ctx.arc(ccx, ccy, rr*0.6, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.fillStyle = "#7a522e";
+      roundRect(x + cw*0.04, yy, w - cw*0.08, h, ch*0.18); ctx.fill();
+      ctx.strokeStyle = "rgba(54,33,12,0.5)";
+      ctx.lineWidth = Math.max(1, ch*0.04);
+      for(let k=1;k<lane.len;k++){
+        const lx = x + k*cw;
+        ctx.beginPath(); ctx.moveTo(lx, yy); ctx.lineTo(lx, yy+h); ctx.stroke();
+      }
+    }
+  }
+
+  function drawFrogShape(cx, cy, size, row, body, dark){
+    const r = size/2;
+    // facing up by default; eyes point up
+    ctx.fillStyle = body;
+    // legs
+    ctx.fillStyle = dark;
+    for(const sx of [-1,1]){
+      roundRect(cx + sx*r*0.55 - r*0.18, cy + r*0.1, r*0.36, r*0.7, r*0.16); ctx.fill();
+    }
+    // body
+    ctx.fillStyle = body;
+    roundRect(cx - r*0.6, cy - r*0.55, r*1.2, r*1.2, r*0.42); ctx.fill();
+    // head bump
+    ctx.beginPath(); ctx.arc(cx, cy - r*0.45, r*0.5, 0, Math.PI*2); ctx.fill();
+    // eyes
+    ctx.fillStyle = "#f6ead8";
+    for(const sx of [-1,1]){
+      ctx.beginPath(); ctx.arc(cx + sx*r*0.32, cy - r*0.62, r*0.22, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.fillStyle = dark;
+    for(const sx of [-1,1]){
+      ctx.beginPath(); ctx.arc(cx + sx*r*0.32, cy - r*0.66, r*0.10, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  function roundRect(x, y, w, h, r){
+    r = Math.min(r, w/2, h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y,   x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x,   y+h, r);
+    ctx.arcTo(x,   y+h, x,   y,   r);
+    ctx.arcTo(x,   y,   x+w, y,   r);
+    ctx.closePath();
+  }
+
+  // --- main loop --------------------------------------------------------
+  function frame(now){
+    const dt = Math.min(0.05, (now - lastT) / 1000);
+    lastT = now;
+
+    updateLanes(dt, now);
+    if(state === "playing") updateFrog(dt);
+
+    const k = 1 - Math.exp(-dt / 0.045);
+    displayX += (fx - displayX) * k;
+    displayY += (fy - displayY) * k;
+
+    // timer bar
+    const frac = clamp(timeLeft / TIME_LIMIT, 0, 1);
+    timerEl.style.width = (frac*100).toFixed(1) + "%";
+    timerEl.classList.toggle("low", frac < 0.25);
+
+    render(now);
+    requestAnimationFrame(frame);
+  }
+
+  // --- bindings ---------------------------------------------------------
+  const KEYMAP = {
+    ArrowLeft:[-1,0], ArrowRight:[1,0], ArrowUp:[0,-1], ArrowDown:[0,1],
+    a:[-1,0], d:[1,0], w:[0,-1], s:[0,1],
+    A:[-1,0], D:[1,0], W:[0,-1], S:[0,1],
+    h:[-1,0], l:[1,0], k:[0,-1], j:[0,1]
+  };
+  window.addEventListener("keydown", e=>{
+    const m = KEYMAP[e.key];
+    if(m){ e.preventDefault(); hop(m[0], m[1]); }
+  });
+
+  // swipe
+  let tStart = null;
+  boardEl.addEventListener("touchstart", e=>{
+    const t = e.changedTouches[0];
+    tStart = {x:t.clientX, y:t.clientY};
+  }, {passive:true});
+  boardEl.addEventListener("touchend", e=>{
+    if(!tStart) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - tStart.x, dy = t.clientY - tStart.y;
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    if(Math.max(ax, ay) >= 20){
+      if(ax > ay) hop(dx > 0 ? 1 : -1, 0);
+      else        hop(0, dy > 0 ? 1 : -1);
+    }
+    tStart = null;
+  }, {passive:true});
+
+  // on-screen dpad
+  const DMAP = { up:[0,-1], down:[0,1], left:[-1,0], right:[1,0] };
+  document.querySelectorAll(".dpad button").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const m = DMAP[btn.dataset.d];
+      if(m) hop(m[0], m[1]);
+    });
+  });
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

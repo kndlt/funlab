@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>슬롯머신 · Slot Machine</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .box.flash .val{animation:pop .4s ease}
+  @keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.28);color:var(--amber)}100%{transform:scale(1)}}
+
+  .machine{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
+  .reels{position:relative;display:flex;gap:10px}
+  .reel{position:relative;flex:1;height:210px;overflow:hidden;border-radius:11px;background:var(--cell);
+    box-shadow:inset 0 0 0 1px var(--line), inset 0 8px 14px rgba(0,0,0,.5), inset 0 -8px 14px rgba(0,0,0,.5)}
+  .reel::before,.reel::after{content:"";position:absolute;left:0;right:0;height:62px;z-index:3;pointer-events:none}
+  .reel::before{top:0;background:linear-gradient(var(--cell),rgba(36,28,18,0))}
+  .reel::after{bottom:0;background:linear-gradient(rgba(36,28,18,0),var(--cell))}
+  .reel.spinning .strip{filter:blur(1.4px)}
+  .reel.thunk{animation:thunk .18s ease}
+  @keyframes thunk{0%{transform:translateY(0)}40%{transform:translateY(3px) scaleY(.985)}100%{transform:translateY(0)}}
+  .strip{will-change:transform}
+  .cell{height:70px;display:flex;align-items:center;justify-content:center;font-size:40px;line-height:1}
+  .cell.hit{animation:hit 1s ease infinite}
+  .cell.near{animation:near .5s ease 2}
+  @keyframes hit{0%,100%{transform:scale(1);filter:drop-shadow(0 0 0 transparent)}50%{transform:scale(1.22);filter:drop-shadow(0 0 8px rgba(255,177,84,.9))}}
+  @keyframes near{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+
+  .payline{position:absolute;top:50%;left:8px;right:8px;height:70px;transform:translateY(-50%);
+    z-index:4;pointer-events:none;border-top:2px solid rgba(255,177,84,.55);border-bottom:2px solid rgba(255,177,84,.55)}
+  .payline.win{border-color:var(--amber);box-shadow:0 0 18px rgba(255,177,84,.35)}
+  .payline .mk{position:absolute;top:50%;transform:translateY(-50%);color:var(--amber);font-size:16px;font-weight:800}
+  .payline .mk.l{left:-4px}
+  .payline .mk.r{right:-4px}
+
+  .confetti-layer{position:absolute;inset:0;overflow:visible;pointer-events:none;z-index:6}
+  .confetti{position:absolute;left:50%;top:42%;font-size:20px;
+    animation:burst .95s ease-out forwards}
+  @keyframes burst{
+    0%{transform:translate(-50%,-50%) scale(.4);opacity:1}
+    100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(1.1) rotate(var(--rot));opacity:0}}
+
+  .winbar{height:34px;margin:14px 0 4px;display:flex;align-items:center;justify-content:center}
+  .winbar .w{font-size:18px;font-weight:800;color:var(--amber);opacity:0}
+  .winbar .w.show{animation:winpop .5s ease forwards}
+  .winbar .w.jackpot{font-size:22px;background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .winbar .w.miss{color:var(--muted);font-size:14px;font-weight:600}
+  @keyframes winpop{0%{opacity:0;transform:translateY(6px) scale(.9)}100%{opacity:1;transform:none}}
+
+  .controls{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:6px}
+  .bet{font-size:12.5px;color:var(--muted);line-height:1.4}
+  .bet b{color:var(--ink)}
+  .spin{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:13px 30px;border-radius:26px;font-size:17px;letter-spacing:1px;cursor:pointer;font-family:inherit}
+  .spin:active{transform:scale(.96)}
+  .spin:disabled{opacity:.5;cursor:default}
+
+  .overlay{position:absolute;inset:0;border-radius:16px;background:rgba(20,17,13,.9);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:8;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:9px 22px;border-radius:24px;font-size:14px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+  .pay{margin-top:12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px 10px;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 14px}
+  .pay .row{display:flex;align-items:center;justify-content:space-between;font-size:12.5px}
+  .pay .row .s{font-size:15px}
+  .pay .row .m{color:var(--amber);font-weight:800;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">슬롯머신<span class="ref">돌리고 멈춘다 — 변동 보상의 중독 · Slot Machine</span></div>
+    <div class="scores">
+      <div class="box" id="creditBox"><div class="lbl">크레딧</div><div class="val" id="credits">100</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="machine" id="machine">
+    <div class="reels">
+      <div class="reel"><div class="strip" id="strip0"></div></div>
+      <div class="reel"><div class="strip" id="strip1"></div></div>
+      <div class="reel"><div class="strip" id="strip2"></div></div>
+      <div class="payline" id="payline"><span class="mk l">▶</span><span class="mk r">◀</span></div>
+      <div class="confetti-layer" id="confetti"></div>
+    </div>
+
+    <div class="winbar"><div class="w" id="win"></div></div>
+
+    <div class="controls">
+      <div class="bet">베팅 <b id="betv">5</b> / 회<br>스페이스바 또는 탭</div>
+      <button class="spin" id="spin">SPIN</button>
+    </div>
+
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="pay" id="paytable"></div>
+
+  <div class="foot">집은 늘 조금 유리하다. 그래도 한 번만 더 돌리게 되는 게 슬롯이다.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const BEST_KEY    = "funlab:slot:best";
+  const START_CREDITS = 100;
+  const BET         = 5;
+  const STRIP_LEN   = 44;
+  const CELL_H      = 70;      // matches .cell height
+  const LANDING     = STRIP_LEN - 3;   // center symbol index after stop
+
+  // symbol: weight drives rarity, x3 = payout multiplier for three-of-a-kind
+  const SYMBOLS = [
+    {key:"cherry", g:"🍒", w:22, x3:7},
+    {key:"lemon",  g:"🍋", w:22, x3:9},
+    {key:"bell",   g:"🔔", w:20, x3:15},
+    {key:"star",   g:"⭐", w:16, x3:38},
+    {key:"gem",    g:"💎", w:12, x3:72},
+    {key:"seven",  g:"7️⃣", w:8,  x3:150},
+  ];
+  const TOTAL_W = SYMBOLS.reduce((a,s)=>a+s.w,0);
+
+  function pick(){
+    let r = Math.random()*TOTAL_W;
+    for(const s of SYMBOLS){ if((r-=s.w) < 0) return s; }
+    return SYMBOLS[SYMBOLS.length-1];
+  }
+
+  // --- DOM ---------------------------------------------------------------
+  const creditsEl = document.getElementById("credits");
+  const creditBox = document.getElementById("creditBox");
+  const bestEl    = document.getElementById("best");
+  const winEl     = document.getElementById("win");
+  const spinBtn   = document.getElementById("spin");
+  const payline   = document.getElementById("payline");
+  const overlay   = document.getElementById("overlay");
+  const overMsg   = document.getElementById("overMsg");
+  const overSmall = document.getElementById("overSmall");
+  const confettiL = document.getElementById("confetti");
+
+  const reels = [0,1,2].map(i=>({
+    el: document.getElementById("strip"+i),
+    strip: [],
+    stopped: false
+  }));
+
+  document.getElementById("betv").textContent = BET;
+
+  // --- state -------------------------------------------------------------
+  let credits = START_CREDITS;
+  let best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+  let spinning = false;
+  let broke = false;
+
+  // --- audio (synth, no files) ------------------------------------------
+  let actx = null;
+  function audio(){
+    if(actx) return actx;
+    try{ actx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ actx = null; }
+    return actx;
+  }
+  function tone(freq, dur, type, gain, when){
+    const a = audio(); if(!a) return;
+    try{
+      const t = a.currentTime + (when||0);
+      const o = a.createOscillator(), g = a.createGain();
+      o.type = type || "triangle";
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(gain||0.06, t+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+(dur||0.08));
+      o.connect(g); g.connect(a.destination);
+      o.start(t); o.stop(t+(dur||0.08)+0.02);
+    }catch(e){}
+  }
+  function thunkSound(i){ tone(150 + i*40, 0.09, "triangle", 0.07); }
+  function winSound(notes, gap){
+    notes.forEach((f,i)=> tone(f, 0.16, "sine", 0.08, i*(gap||0.09)));
+  }
+
+  // --- paytable display --------------------------------------------------
+  function buildPaytable(){
+    const order = ["seven","gem","star","bell","lemon","cherry"];
+    let html = "";
+    for(const k of order){
+      const s = SYMBOLS.find(x=>x.key===k);
+      html += `<div class="row"><span class="s">${s.g}${s.g}${s.g}</span><span class="m">×${s.x3}</span></div>`;
+    }
+    html += `<div class="row"><span class="s">🍒🍒</span><span class="m">×2</span></div>`;
+    document.getElementById("paytable").innerHTML = html;
+  }
+
+  // --- reel strip --------------------------------------------------------
+  function buildStrip(reel, freshTop){
+    reel.strip = [];
+    let html = "";
+    for(let i=0;i<STRIP_LEN;i++){
+      const s = pick();
+      reel.strip.push(s);
+      html += `<div class="cell">${s.g}</div>`;
+    }
+    reel.el.innerHTML = html;
+    reel.el.style.transform = "translateY(0)";
+    reel.stopped = false;
+  }
+
+  function offsetFor(idx){ return (idx-1) * CELL_H; }   // idx as center row
+
+  // easing: decelerate with a tiny settle past the stop
+  function easeOutBack(t){
+    const c1 = 0.9, c3 = c1 + 1;
+    return 1 + c3*Math.pow(t-1,3) + c1*Math.pow(t-1,2);
+  }
+
+  function animateReel(reel, duration, onDone){
+    const startOff = 0;
+    const endOff = offsetFor(LANDING);
+    const t0 = performance.now();
+    function tick(now){
+      let t = (now - t0) / duration;
+      if(t >= 1){
+        reel.el.style.transform = "translateY(" + (-endOff) + "px)";
+        onDone();
+        return;
+      }
+      const e = easeOutBack(t);
+      const off = startOff + (endOff - startOff) * e;
+      reel.el.style.transform = "translateY(" + (-off) + "px)";
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  // --- ui ----------------------------------------------------------------
+  function setCredits(v, flash){
+    credits = v;
+    creditsEl.textContent = credits;
+    if(credits > best){
+      best = credits;
+      localStorage.setItem(BEST_KEY, String(best));
+    }
+    bestEl.textContent = best;
+    if(flash){
+      creditBox.classList.remove("flash"); void creditBox.offsetWidth;
+      creditBox.classList.add("flash");
+    }
+  }
+
+  function countUp(from, to){
+    const start = performance.now(), dur = 520;
+    function tick(now){
+      const t = Math.min(1, (now-start)/dur);
+      const v = Math.round(from + (to-from)*(1-Math.pow(1-t,3)));
+      creditsEl.textContent = v;
+      if(t < 1) requestAnimationFrame(tick);
+      else creditsEl.textContent = to;
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function showWin(text, cls){
+    winEl.className = "w";
+    winEl.textContent = text;
+    void winEl.offsetWidth;
+    winEl.classList.add("show");
+    if(cls) winEl.classList.add(cls);
+  }
+  function clearWin(){ winEl.className = "w"; winEl.textContent = ""; }
+
+  function centerCell(reel){ return reel.el.children[LANDING]; }
+  function clearMarks(){
+    payline.classList.remove("win");
+    reels.forEach(r=>{
+      for(const c of r.el.children) c.classList.remove("hit","near");
+    });
+  }
+
+  function confetti(n){
+    const emoji = ["✨","🎉","💰","⭐","🍒"];
+    for(let i=0;i<n;i++){
+      const s = document.createElement("span");
+      s.className = "confetti";
+      s.textContent = emoji[(Math.random()*emoji.length)|0];
+      s.style.setProperty("--dx", ((Math.random()*2-1)*160).toFixed(0)+"px");
+      s.style.setProperty("--dy", ((Math.random()*-1)*150 - 10).toFixed(0)+"px");
+      s.style.setProperty("--rot", ((Math.random()*2-1)*220).toFixed(0)+"deg");
+      s.style.animationDelay = (Math.random()*0.12).toFixed(2)+"s";
+      confettiL.appendChild(s);
+      s.addEventListener("animationend", ()=> s.remove());
+    }
+  }
+
+  // --- evaluate ----------------------------------------------------------
+  function resolve(results){
+    spinning = false;
+    reels.forEach(r=> r.el.parentNode.classList.remove("spinning"));
+
+    const keys = results.map(s=>s.key);
+    const allSame = keys[0]===keys[1] && keys[1]===keys[2];
+    let winAmt = 0, label = "", cls = "", jackpot = false;
+
+    if(allSame){
+      const s = results[0];
+      winAmt = BET * s.x3;
+      jackpot = s.key === "seven";
+      label = jackpot ? "🎰 JACKPOT  +" + winAmt : s.g + s.g + s.g + "  +" + winAmt;
+      cls = jackpot ? "jackpot" : "";
+      reels.forEach(r=> centerCell(r).classList.add("hit"));
+    } else {
+      const cherryReels = reels.filter(r=> r.strip[LANDING].key === "cherry");
+      if(cherryReels.length === 2){
+        winAmt = BET * 2;
+        label = "🍒🍒  +" + winAmt;
+        cherryReels.forEach(r=> centerCell(r).classList.add("hit"));
+      }
+    }
+
+    const before = credits;
+    if(winAmt > 0){
+      payline.classList.add("win");
+      setCredits(credits + winAmt, true);
+      countUp(before, credits);
+      showWin(label, cls);
+      if(jackpot){ confetti(30); winSound([523,659,784,1047,1319], 0.1); }
+      else if(winAmt >= BET*20){ confetti(16); winSound([523,659,784], 0.09); }
+      else { confetti(8); winSound([523,784], 0.08); }
+    } else {
+      // near miss: two of any kind matching on the line
+      let nearKey = null;
+      if(keys[0]===keys[1] || keys[1]===keys[2]) nearKey = keys[1];
+      else if(keys[0]===keys[2]) nearKey = keys[0];
+      if(nearKey){
+        reels.forEach(r=>{ if(r.strip[LANDING].key===nearKey) centerCell(r).classList.add("near"); });
+        const close = nearKey === "seven" ? "7 두 개… 한 끗 모자라다" : "둘 맞췄다. 아깝다.";
+        showWin(close, "miss");
+        tone(196, 0.18, "sawtooth", 0.04);
+      } else {
+        showWin("꽝 — 다시 돌려", "miss");
+      }
+    }
+
+    if(credits < BET){
+      setTimeout(showBroke, 700);
+    }
+  }
+
+  function spin(){
+    if(spinning || broke) return;
+    if(credits < BET){ showBroke(); return; }
+    const a = audio(); if(a && a.state === "suspended"){ try{ a.resume(); }catch(e){} }
+
+    spinning = true;
+    clearMarks();
+    clearWin();
+    setCredits(credits - BET, false);
+
+    const results = [];
+    let done = 0;
+    reels.forEach((reel, i)=>{
+      buildStrip(reel);
+      results[i] = reel.strip[LANDING];
+      reel.el.parentNode.classList.add("spinning");
+      const duration = 1050 + i*420 + Math.random()*120;
+      animateReel(reel, duration, ()=>{
+        const box = reel.el.parentNode;
+        box.classList.remove("spinning");
+        box.classList.remove("thunk"); void box.offsetWidth;
+        box.classList.add("thunk");
+        thunkSound(i);
+        done++;
+        if(done === reels.length) resolve(results);
+      });
+    });
+  }
+
+  function showBroke(){
+    broke = true;
+    overMsg.innerHTML = "크레딧 0 · best <b>" + best + "</b>";
+    overSmall.textContent = "빈털터리. 한 판 더 줄 테니 다시 돌려봐.";
+    overlay.classList.add("show");
+  }
+
+  function reset(){
+    broke = false;
+    spinning = false;
+    overlay.classList.remove("show");
+    clearMarks();
+    clearWin();
+    reels.forEach(r=> buildStrip(r));
+    setCredits(START_CREDITS, false);
+  }
+
+  // --- input -------------------------------------------------------------
+  spinBtn.addEventListener("click", spin);
+  document.getElementById("overRestart").addEventListener("click", reset);
+  window.addEventListener("keydown", e=>{
+    if(e.code === "Space" || e.key === " "){
+      e.preventDefault();
+      if(broke) reset(); else spin();
+    }
+  });
+
+  // --- init --------------------------------------------------------------
+  buildPaytable();
+  reels.forEach(r=> buildStrip(r));
+  setCredits(START_CREDITS, false);
+  bestEl.textContent = best;
+})();
+</script>
+</body>
+</html>

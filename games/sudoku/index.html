@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>스도쿠 · Sudoku</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:1/1;padding:7px}
+  .grid{position:relative;width:100%;height:100%;display:grid;
+    grid-template-columns:repeat(9,1fr);grid-template-rows:repeat(9,1fr);
+    background:var(--line);gap:1px;border:2px solid #4a3d2c;border-radius:6px;overflow:hidden}
+  .cell{background:var(--cell);display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink);cursor:pointer;
+    position:relative;font-size:clamp(16px,5.4vw,26px);line-height:1;transition:background .08s}
+  /* thicker 3x3 box borders via right/bottom edges */
+  .cell.br{box-shadow:inset -2px 0 0 #4a3d2c}
+  .cell.bb{box-shadow:inset 0 -2px 0 #4a3d2c}
+  .cell.br.bb{box-shadow:inset -2px 0 0 #4a3d2c, inset 0 -2px 0 #4a3d2c}
+  .cell.given{color:var(--cream);font-weight:800}
+  .cell.peer{background:#2b2216}
+  .cell.same{background:#3a2c16}
+  .cell.sel{background:#4a3415}
+  .cell.bad{color:#ff6b5e}
+  .cell.sel.bad{background:#5a2418}
+  .cell.lit{box-shadow:inset 0 0 0 2px var(--amber)}
+  .cell.lit.br{box-shadow:inset 0 0 0 2px var(--amber), inset -2px 0 0 #4a3d2c}
+  .cell.lit.bb{box-shadow:inset 0 0 0 2px var(--amber), inset 0 -2px 0 #4a3d2c}
+  .cell.lit.br.bb{box-shadow:inset 0 0 0 2px var(--amber), inset -2px 0 0 #4a3d2c, inset 0 -2px 0 #4a3d2c}
+
+  .pad{display:grid;grid-template-columns:repeat(9,1fr);gap:6px;margin-top:14px}
+  .key{background:var(--panel);border:1px solid var(--line);border-radius:10px;color:var(--cream);
+    font-size:20px;font-weight:800;font-family:inherit;padding:12px 0;cursor:pointer;
+    font-variant-numeric:tabular-nums;transition:transform .06s,background .1s}
+  .key:active{transform:scale(.92);background:#2b2216}
+  .key.done{color:#5a4d3a;background:#191510}
+  .padrow2{display:flex;justify-content:center;margin-top:6px}
+  .key.erase{flex:1;font-size:14px;letter-spacing:.5px;color:var(--amber);padding:11px 0}
+
+  .over{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.88);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .over.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .over .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .over .msg b{color:var(--amber)}
+  .over .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">스도쿠<span class="ref">숫자로 빈칸을 추리해 채운다 · Sudoku</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">시간</div><div class="val" id="time">0:00</div></div>
+      <div class="box"><div class="lbl">실수</div><div class="val" id="mistakes">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">칸 선택 · 1–9 / 지우기</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <div class="grid" id="grid"></div>
+    <div class="over" id="over">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="pad" id="pad"></div>
+  <div class="padrow2"><button class="key erase" id="erase">⌫ 지우기</button></div>
+
+  <div class="foot">행·열·3×3 칸마다 1–9를 한 번씩. 같은 줄에 같은 숫자는 붉게 표시된다.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const BEST_KEY = "funlab:sudoku:best";
+  const GIVENS = 36;
+
+  // ---- generator / solver ----------------------------------------------
+  function shuffle(a){
+    for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; }
+    return a;
+  }
+
+  // backtracking fill of a full valid solution into a length-81 array
+  function fillSolution(){
+    const g = new Array(81).fill(0);
+    function solve(pos){
+      if(pos === 81) return true;
+      if(g[pos] !== 0) return solve(pos+1);
+      const r = (pos/9)|0, c = pos%9;
+      const nums = shuffle([1,2,3,4,5,6,7,8,9]);
+      for(const n of nums){
+        if(canPlace(g, r, c, n)){
+          g[pos] = n;
+          if(solve(pos+1)) return true;
+          g[pos] = 0;
+        }
+      }
+      return false;
+    }
+    solve(0);
+    return g;
+  }
+
+  function canPlace(g, r, c, n){
+    for(let i=0;i<9;i++){
+      if(g[r*9+i] === n) return false;       // row
+      if(g[i*9+c] === n) return false;       // col
+    }
+    const br = r-(r%3), bc = c-(c%3);
+    for(let dr=0;dr<3;dr++) for(let dc=0;dc<3;dc++){
+      if(g[(br+dr)*9 + (bc+dc)] === n) return false; // box
+    }
+    return true;
+  }
+
+  // count solutions, stop early at `cap` (used with cap=2 for uniqueness)
+  function countSolutions(g, cap){
+    const work = g.slice();
+    let count = 0;
+    function solve(pos){
+      if(count >= cap) return;
+      while(pos < 81 && work[pos] !== 0) pos++;
+      if(pos === 81){ count++; return; }
+      const r=(pos/9)|0, c=pos%9;
+      for(let n=1;n<=9;n++){
+        if(canPlace(work, r, c, n)){
+          work[pos] = n;
+          solve(pos+1);
+          work[pos] = 0;
+          if(count >= cap) return;
+        }
+      }
+    }
+    solve(0);
+    return count;
+  }
+
+  // generate a puzzle: full solution + dug holes preserving uniqueness
+  function generate(targetGivens){
+    const solution = fillSolution();
+    const puzzle = solution.slice();
+    // try to remove cells in random order, keep only if still unique
+    const order = shuffle([...Array(81).keys()]);
+    let givens = 81;
+    for(const idx of order){
+      if(givens <= targetGivens) break;
+      const saved = puzzle[idx];
+      if(saved === 0) continue;
+      puzzle[idx] = 0;
+      if(countSolutions(puzzle, 2) === 1){
+        givens--;
+      } else {
+        puzzle[idx] = saved; // restore: removal broke uniqueness
+      }
+    }
+    return {puzzle, solution};
+  }
+
+  // ---- state -----------------------------------------------------------
+  let puzzle, solution, given, value; // arrays len 81
+  let sel = -1;                       // selected index, -1 none
+  let mistakes = 0;
+  let startMs = 0, timerId = null, solved = false;
+
+  const gridEl = document.getElementById("grid");
+  const padEl  = document.getElementById("pad");
+  const timeEl = document.getElementById("time");
+  const missEl = document.getElementById("mistakes");
+  const overEl = document.getElementById("over");
+  const overMsg = document.getElementById("overMsg");
+  const overSmall = document.getElementById("overSmall");
+
+  // build 81 cells once
+  const cells = [];
+  for(let i=0;i<81;i++){
+    const r=(i/9)|0, c=i%9;
+    const d = document.createElement("div");
+    d.className = "cell";
+    if(c===2||c===5) d.classList.add("br");
+    if(r===2||r===5) d.classList.add("bb");
+    d.dataset.i = i;
+    gridEl.appendChild(d);
+    cells.push(d);
+  }
+  // build keypad 1-9
+  const keys = [];
+  for(let n=1;n<=9;n++){
+    const k = document.createElement("button");
+    k.className = "key"; k.textContent = n; k.dataset.n = n;
+    padEl.appendChild(k);
+    keys.push(k);
+  }
+
+  function newGame(){
+    const g = generate(GIVENS);
+    puzzle = g.puzzle; solution = g.solution;
+    given = puzzle.map(v => v !== 0);
+    value = puzzle.slice();
+    sel = -1; mistakes = 0; solved = false;
+    overEl.classList.remove("show");
+    missEl.textContent = "0";
+    startMs = performance.now();
+    if(timerId) clearInterval(timerId);
+    timerId = setInterval(tick, 250);
+    timeEl.textContent = "0:00";
+    renderAll();
+  }
+
+  function tick(){
+    if(solved) return;
+    const s = Math.floor((performance.now()-startMs)/1000);
+    timeEl.textContent = fmt(s);
+  }
+  function fmt(s){
+    const m = (s/60)|0, ss = s%60;
+    return m + ":" + (ss<10?"0":"") + ss;
+  }
+
+  // is value[idx] in conflict with a filled peer holding same number?
+  function isConflict(idx){
+    const v = value[idx];
+    if(!v) return false;
+    const r=(idx/9)|0, c=idx%9;
+    for(let i=0;i<9;i++){
+      const ri = r*9+i, ci = i*9+c;
+      if(ri!==idx && value[ri]===v) return true;
+      if(ci!==idx && value[ci]===v) return true;
+    }
+    const br=r-(r%3), bc=c-(c%3);
+    for(let dr=0;dr<3;dr++) for(let dc=0;dc<3;dc++){
+      const j=(br+dr)*9+(bc+dc);
+      if(j!==idx && value[j]===v) return true;
+    }
+    return false;
+  }
+
+  function renderAll(){
+    const selR = sel>=0 ? (sel/9)|0 : -1;
+    const selC = sel>=0 ? sel%9 : -1;
+    const selBr = selR>=0 ? selR-(selR%3) : -1;
+    const selBc = selC>=0 ? selC-(selC%3) : -1;
+    const selVal = sel>=0 ? value[sel] : 0;
+
+    for(let i=0;i<81;i++){
+      const cell = cells[i];
+      const r=(i/9)|0, c=i%9;
+      const v = value[i];
+      cell.textContent = v ? v : "";
+      // reset state classes (preserve br/bb structural)
+      cell.classList.remove("given","peer","same","sel","bad","lit");
+      if(given[i]) cell.classList.add("given");
+      if(v && isConflict(i)) cell.classList.add("bad");
+
+      if(sel>=0){
+        const inPeer = (r===selR || c===selC ||
+          (r>=selBr && r<selBr+3 && c>=selBc && c<selBc+3));
+        if(i===sel){ cell.classList.add("sel","lit"); }
+        else if(inPeer){ cell.classList.add("peer"); }
+        if(selVal && v===selVal && i!==sel){ cell.classList.add("same"); }
+      }
+    }
+    updatePad();
+  }
+
+  // grey out a keypad digit once all nine are correctly placed
+  function updatePad(){
+    const counts = new Array(10).fill(0);
+    for(let i=0;i<81;i++){
+      if(value[i] && value[i]===solution[i]) counts[value[i]]++;
+    }
+    for(const k of keys){
+      const n = +k.dataset.n;
+      k.classList.toggle("done", counts[n] >= 9);
+    }
+  }
+
+  function select(idx){
+    if(solved) return;
+    sel = idx;
+    renderAll();
+  }
+
+  function place(n){
+    if(solved || sel<0 || given[sel]) return;
+    if(value[sel] === n){ return; }
+    value[sel] = n;
+    // mistake = placed a number that doesn't match the unique solution
+    if(n !== solution[sel]) mistakes++;
+    missEl.textContent = mistakes;
+    renderAll();
+    checkWin();
+  }
+
+  function erase(){
+    if(solved || sel<0 || given[sel]) return;
+    if(value[sel]===0) return;
+    value[sel] = 0;
+    renderAll();
+  }
+
+  function checkWin(){
+    for(let i=0;i<81;i++){ if(value[i] !== solution[i]) return; }
+    solved = true;
+    if(timerId) clearInterval(timerId);
+    const secs = Math.floor((performance.now()-startMs)/1000);
+    const prev = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+    let best = prev;
+    let record = false;
+    if(prev === 0 || secs < prev){ best = secs; localStorage.setItem(BEST_KEY, String(secs)); record = true; }
+    overMsg.innerHTML = `완성 · <b>${fmt(secs)}</b>`;
+    overSmall.textContent = record
+      ? `최단 기록! 실수 ${mistakes}회.`
+      : `최단 기록 ${fmt(best)} · 실수 ${mistakes}회.`;
+    overEl.classList.add("show");
+  }
+
+  // ---- input -----------------------------------------------------------
+  gridEl.addEventListener("click", e=>{
+    const t = e.target.closest(".cell");
+    if(!t) return;
+    select(+t.dataset.i);
+  });
+
+  padEl.addEventListener("click", e=>{
+    const k = e.target.closest(".key");
+    if(!k) return;
+    place(+k.dataset.n);
+  });
+
+  document.getElementById("erase").addEventListener("click", erase);
+
+  window.addEventListener("keydown", e=>{
+    if(e.key >= "1" && e.key <= "9"){ e.preventDefault(); place(+e.key); return; }
+    if(e.key === "Backspace" || e.key === "Delete" || e.key === "0"){ e.preventDefault(); erase(); return; }
+    if(sel < 0) return;
+    let r=(sel/9)|0, c=sel%9;
+    if(e.key === "ArrowLeft"){ e.preventDefault(); c=(c+8)%9; select(r*9+c); }
+    else if(e.key === "ArrowRight"){ e.preventDefault(); c=(c+1)%9; select(r*9+c); }
+    else if(e.key === "ArrowUp"){ e.preventDefault(); r=(r+8)%9; select(r*9+c); }
+    else if(e.key === "ArrowDown"){ e.preventDefault(); r=(r+1)%9; select(r*9+c); }
+  });
+
+  document.getElementById("restart").addEventListener("click", newGame);
+  document.getElementById("overRestart").addEventListener("click", newGame);
+
+  newGame();
+})();
+</script>
+</body>
+</html>

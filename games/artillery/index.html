@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>포격 · Artillery</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:manipulation; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:#0f0d09;border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:3/2;overflow:hidden}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+
+  .ctrl{display:flex;flex-direction:column;gap:11px;background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:13px 14px;margin-top:12px}
+  .ctrl.off{opacity:.5}
+  .row{display:flex;align-items:center;gap:12px}
+  .row label{font-size:12px;color:var(--muted);width:38px;font-weight:700}
+  .row .rv{font-size:16px;font-weight:800;color:var(--cream);width:58px;text-align:right;font-variant-numeric:tabular-nums}
+  input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:6px;border-radius:6px;
+    background:var(--line);outline:none}
+  input[type=range]:disabled{opacity:.6}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:22px;
+    border-radius:50%;background:linear-gradient(#ffc266,#ff9e3d);border:none;cursor:pointer;
+    box-shadow:0 1px 4px rgba(0,0,0,.5)}
+  input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;border:none;
+    background:linear-gradient(#ffc266,#ff9e3d);cursor:pointer}
+  .fire{margin-top:2px;background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;
+    border:none;padding:13px;border-radius:12px;font-size:16px;cursor:pointer;font-family:inherit;
+    letter-spacing:1px}
+  .fire:active{transform:scale(.98)}
+  .fire:disabled{opacity:.5;cursor:default}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">포격<span class="ref">각도와 힘을 맞춰 맞힌다 — 바람을 읽어라 · Artillery</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">연승</div><div class="val" id="streak">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">방향키 각도·힘 / Space 발사</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <canvas id="cv"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="ctrl" id="ctrl">
+    <div class="row">
+      <label>각도</label>
+      <input type="range" id="angle" min="10" max="80" step="1" value="45">
+      <div class="rv" id="angleV">45°</div>
+    </div>
+    <div class="row">
+      <label>힘</label>
+      <input type="range" id="power" min="10" max="100" step="1" value="55">
+      <div class="rv" id="powerV">55</div>
+    </div>
+    <button class="fire" id="fire">발사</button>
+  </div>
+
+  <div class="foot">왼쪽이 너, 오른쪽이 적. 포물선은 중력에 끌리고 바람에 밀린다. 먼저 적의 HP를 0으로.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const BEST_KEY = "funlab:artillery:best";
+
+  // physics (logical CSS px units)
+  const K        = 7;        // muzzle velocity per power unit (px/s)
+  const G        = 600;      // gravity px/s^2
+  const WIND_MAX = 170;      // px/s^2 at |wind|=100
+  const HPMAX    = 3;
+  const RAD      = 30;       // explosion damage radius
+  const DIRECT   = 14;       // direct-hit radius (extra damage)
+
+  const boardEl  = document.getElementById("board");
+  const cv       = document.getElementById("cv");
+  const ctx      = cv.getContext("2d");
+  const streakEl = document.getElementById("streak");
+  const bestEl   = document.getElementById("best");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+  const ctrlEl   = document.getElementById("ctrl");
+  const angleEl  = document.getElementById("angle");
+  const powerEl  = document.getElementById("power");
+  const angleVEl = document.getElementById("angleV");
+  const powerValEl = document.getElementById("powerV");
+  const fireBtn  = document.getElementById("fire");
+
+  // --- sizing (retina, work in logical px via transform) ----------------
+  let W = 0, H = 0, dpr = 1;
+  function resize(){
+    const rect = boardEl.getBoundingClientRect();
+    dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    W = rect.width;
+    H = rect.height;
+    cv.width  = Math.round(W * dpr);
+    cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener("resize", ()=>{ resize(); });
+
+  // --- terrain ----------------------------------------------------------
+  let terr; // {base, a1,f1,p1, a2,f2,p2}
+  function terrainHeight(x){
+    // y of ground at world x (logical px). bigger y = lower on screen.
+    const base = H * terr.base;
+    const y = base
+      + terr.a1*H * Math.sin(x*terr.f1 + terr.p1)
+      + terr.a2*H * Math.sin(x*terr.f2 + terr.p2);
+    return y;
+  }
+  function makeTerrain(){
+    terr = {
+      base: 0.70,
+      a1: 0.045, f1: 0.011 + Math.random()*0.006, p1: Math.random()*6.28,
+      a2: 0.028, f2: 0.024 + Math.random()*0.010, p2: Math.random()*6.28
+    };
+  }
+
+  // --- state ------------------------------------------------------------
+  let player, enemy;     // {x, hp}  y derived from terrain
+  let windPct;           // -100..100, + pushes right
+  let windAccel;         // px/s^2
+  let aimAngle, aimPower;
+  let proj;              // {x,y,vx,vy,owner,trail:[]}  or null
+  let particles;         // explosion particles
+  let phase;             // 'aim' | 'flying' | 'boom' | 'enemyturn' | 'over'
+  let turn;              // 'player' | 'enemy'
+  let boomEnd, boomStart, enemyThinkEnd;
+  let pending;           // {target, dmg, ix, iy}
+  let streak, best;
+  let lastTs;
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+  streak = 0;
+
+  function tankY(t){ return terrainHeight(t.x); }
+
+  function newRound(){
+    resize();
+    makeTerrain();
+    // positions: player left, enemy right, with margin
+    player = { x: 36 + Math.random()*46, hp: HPMAX };
+    enemy  = { x: W - 36 - Math.random()*46, hp: HPMAX };
+    windPct = Math.round((Math.random()*2 - 1) * 72);
+    windAccel = windPct/100 * WIND_MAX;
+    aimAngle = +angleEl.value;
+    aimPower = +powerEl.value;
+    proj = null;
+    particles = [];
+    pending = null;
+    turn = "player";
+    phase = "aim";
+    overlay.classList.remove("show");
+    setControls(true);
+    updateScores();
+    syncReadouts();
+    lastTs = performance.now();
+  }
+
+  function fullReset(){
+    streak = 0;
+    newRound();
+  }
+
+  function updateScores(){
+    streakEl.textContent = streak;
+    bestEl.textContent = best;
+  }
+  function setControls(on){
+    angleEl.disabled = !on;
+    powerEl.disabled = !on;
+    fireBtn.disabled = !on;
+    ctrlEl.classList.toggle("off", !on);
+  }
+  function syncReadouts(){
+    angleVEl.textContent = aimAngle + "°";
+    powerValEl.textContent = aimPower;
+  }
+
+  // --- firing -----------------------------------------------------------
+  function muzzle(t, angle, dir){
+    const pivotY = tankY(t) - 11;
+    const rad = angle * Math.PI/180;
+    const L = 18;
+    return {
+      x: t.x + dir*Math.cos(rad)*L,
+      y: pivotY - Math.sin(rad)*L
+    };
+  }
+
+  function fire(owner, angle, power){
+    const t = owner === "player" ? player : enemy;
+    const dir = owner === "player" ? 1 : -1;
+    const m = muzzle(t, angle, dir);
+    const rad = angle * Math.PI/180;
+    const v0 = power * K;
+    proj = {
+      x: m.x, y: m.y,
+      vx: dir * Math.cos(rad) * v0,
+      vy: -Math.sin(rad) * v0,
+      owner, life: 0, trail: []
+    };
+    phase = "flying";
+    setControls(false);
+  }
+
+  function playerFire(){
+    if(phase !== "aim" || turn !== "player") return;
+    fire("player", aimAngle, aimPower);
+  }
+
+  // --- AI ---------------------------------------------------------------
+  // simulate where a shot lands (returns world x of impact, or sentinel)
+  function simImpactX(t, angle, power, dir){
+    const m = muzzle(t, angle, dir);
+    const rad = angle * Math.PI/180;
+    const v0 = power * K;
+    let x = m.x, y = m.y;
+    let vx = dir*Math.cos(rad)*v0, vy = -Math.sin(rad)*v0;
+    const h = 1/120;
+    for(let i=0;i<4000;i++){
+      vx += windAccel*h; vy += G*h;
+      x += vx*h; y += vy*h;
+      const cx = Math.max(0, Math.min(W, x));
+      if(y >= terrainHeight(cx)) return x;
+      if(y > H + 80) return x;
+    }
+    return 1e9;
+  }
+  function enemyFire(){
+    const dir = -1;
+    const angles = [38, 44, 50, 56, 62];
+    let bestA = 50, bestP = 55, bestD = 1e12;
+    for(const a of angles){
+      for(let p=20; p<=100; p+=2){
+        const x = simImpactX(enemy, a, p, dir);
+        const d = Math.abs(x - player.x);
+        if(d < bestD){ bestD = d; bestA = a; bestP = p; }
+      }
+    }
+    // beatable error
+    bestP += (Math.random()*2-1) * 8;
+    bestA += (Math.random()*2-1) * 3;
+    bestP = Math.max(15, Math.min(100, bestP));
+    bestA = Math.max(15, Math.min(78, bestA));
+    enemy.aimA = bestA; enemy.aimP = bestP; // for barrel draw
+    fire("enemy", bestA, bestP);
+  }
+
+  // --- impact / resolution ---------------------------------------------
+  function doImpact(ix, iy){
+    boomStart = performance.now();
+    boomEnd = boomStart + 480;
+    phase = "boom";
+    spawnExplosion(ix, iy);
+    const target = proj.owner === "player" ? enemy : player;
+    const cx = target.x, cy = tankY(target) - 8;
+    const d = Math.hypot(ix - cx, iy - cy);
+    let dmg = 0;
+    if(d < DIRECT) dmg = 2;
+    else if(d < RAD) dmg = 1;
+    pending = { target, dmg };
+  }
+
+  function resolveImpact(){
+    const ownerWasPlayer = proj.owner === "player";
+    if(pending && pending.dmg > 0){
+      pending.target.hp = Math.max(0, pending.target.hp - pending.dmg);
+    }
+    proj = null;
+    if(enemy.hp <= 0){ roundEnd("player"); return; }
+    if(player.hp <= 0){ roundEnd("enemy"); return; }
+    // switch turn
+    turn = ownerWasPlayer ? "enemy" : "player";
+    if(turn === "enemy"){
+      phase = "enemyturn";
+      enemyThinkEnd = performance.now() + 620;
+    } else {
+      phase = "aim";
+      setControls(true);
+    }
+    pending = null;
+  }
+
+  function roundEnd(winner){
+    phase = "over";
+    setControls(false);
+    if(winner === "player"){
+      streak += 1;
+      let rec = false;
+      if(streak > best){ best = streak; localStorage.setItem(BEST_KEY, String(best)); rec = true; }
+      overMsg.innerHTML = `명중! <b>적 격파</b>`;
+      overSmall.textContent = rec ? `최고 연승 경신 · ${streak}연승` : `${streak}연승 중. 다음 판도 잡아라.`;
+    } else {
+      const lost = streak;
+      streak = 0;
+      overMsg.innerHTML = `당했다 · <b>패배</b>`;
+      overSmall.textContent = lost > 0 ? `${lost}연승 마감. 바람을 더 읽어라.` : "바람을 더 읽어라. 다시.";
+    }
+    updateScores();
+    overlay.classList.add("show");
+  }
+
+  // --- explosion --------------------------------------------------------
+  function spawnExplosion(x, y){
+    const n = 16;
+    for(let i=0;i<n;i++){
+      const a = Math.random()*Math.PI*2;
+      const sp = 60 + Math.random()*180;
+      particles.push({
+        x, y,
+        vx: Math.cos(a)*sp,
+        vy: Math.sin(a)*sp - 40,
+        life: 0, max: 0.4 + Math.random()*0.35,
+        r: 1.5 + Math.random()*2.5
+      });
+    }
+  }
+  function updateParticles(dt){
+    for(const p of particles){
+      p.life += dt;
+      p.vy += 420*dt;
+      p.x += p.vx*dt;
+      p.y += p.vy*dt;
+    }
+    particles = particles.filter(p => p.life < p.max);
+  }
+
+  // --- rendering --------------------------------------------------------
+  function render(){
+    ctx.clearRect(0,0,W,H);
+
+    // sky
+    const sky = ctx.createLinearGradient(0,0,0,H);
+    sky.addColorStop(0, "#1a160f");
+    sky.addColorStop(1, "#0e0c08");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0,0,W,H);
+
+    // wind indicator (top center)
+    drawWind();
+
+    // terrain
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    ctx.lineTo(0, terrainHeight(0));
+    for(let x=0; x<=W; x+=4) ctx.lineTo(x, terrainHeight(x));
+    ctx.lineTo(W, terrainHeight(W));
+    ctx.lineTo(W, H);
+    ctx.closePath();
+    const grd = ctx.createLinearGradient(0,H*0.5,0,H);
+    grd.addColorStop(0, "#2c2316");
+    grd.addColorStop(1, "#1a140c");
+    ctx.fillStyle = grd;
+    ctx.fill();
+    // crest line
+    ctx.beginPath();
+    ctx.moveTo(0, terrainHeight(0));
+    for(let x=0; x<=W; x+=4) ctx.lineTo(x, terrainHeight(x));
+    ctx.strokeStyle = "rgba(255,178,84,0.35)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // tanks
+    const pAng = (turn==="player") ? aimAngle : (player.aimA || aimAngle);
+    drawTank(player, pAng, 1, "#ffb154", turn==="player" && phase==="aim");
+    const eAng = enemy.aimA || 50;
+    drawTank(enemy, eAng, -1, "#d2674a", turn==="enemy" && phase!=="over");
+
+    // HP pips
+    drawHP();
+
+    // projectile trail + shell
+    if(proj){
+      ctx.beginPath();
+      for(let i=0;i<proj.trail.length;i++){
+        const t = proj.trail[i];
+        if(i===0) ctx.moveTo(t.x, t.y); else ctx.lineTo(t.x, t.y);
+      }
+      ctx.strokeStyle = "rgba(255,200,130,0.45)";
+      ctx.setLineDash([2,4]);
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // shell
+      ctx.save();
+      ctx.shadowColor = "rgba(255,177,84,0.9)";
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = "#ffe0b0";
+      ctx.beginPath();
+      ctx.arc(proj.x, proj.y, 3.2, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // explosion
+    if(particles.length){
+      for(const p of particles){
+        const k = 1 - p.life/p.max;
+        ctx.globalAlpha = Math.max(0, k);
+        ctx.fillStyle = k > 0.5 ? "#ffe0a0" : "#ff7a3d";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    if(phase === "boom"){
+      const t = (performance.now() - boomStart)/480;
+      if(t <= 1){
+        ctx.globalAlpha = (1-t)*0.7;
+        ctx.strokeStyle = "#ffb154";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(boomX, boomY, RAD*0.4 + t*RAD*1.4, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  let boomX = 0, boomY = 0;
+
+  function drawWind(){
+    const cx = W/2, y = 20;
+    ctx.fillStyle = "rgba(169,151,126,0.9)";
+    ctx.font = "700 11px ui-rounded, system-ui, sans-serif";
+    ctx.textAlign = "center";
+    const mag = Math.abs(windPct);
+    let txt;
+    if(mag < 4) txt = "무풍";
+    else txt = (windPct > 0 ? "바람 →  " : "바람 ←  ") + mag;
+    ctx.fillText(txt, cx, y);
+    // arrow bar
+    if(mag >= 4){
+      const len = 10 + mag/100 * 46;
+      const dir = windPct > 0 ? 1 : -1;
+      const ay = y + 11;
+      ctx.strokeStyle = "rgba(255,178,84,0.7)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - dir*len/2, ay);
+      ctx.lineTo(cx + dir*len/2, ay);
+      ctx.stroke();
+      const hx = cx + dir*len/2;
+      ctx.beginPath();
+      ctx.moveTo(hx, ay);
+      ctx.lineTo(hx - dir*5, ay - 3);
+      ctx.lineTo(hx - dir*5, ay + 3);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(255,178,84,0.7)";
+      ctx.fill();
+    }
+  }
+
+  function drawTank(t, angle, dir, color, active){
+    const gx = t.x, gy = tankY(t);
+    // body
+    ctx.fillStyle = color;
+    roundRect(ctx, gx-12, gy-9, 24, 9, 3);
+    ctx.fill();
+    // tracks
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    roundRect(ctx, gx-13, gy-3, 26, 4, 2);
+    ctx.fill();
+    // turret
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(gx, gy-10, 6, Math.PI, 0);
+    ctx.fill();
+    // barrel
+    const rad = angle * Math.PI/180;
+    const px = gx, py = gy-11;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(px + dir*Math.cos(rad)*17, py - Math.sin(rad)*17);
+    ctx.stroke();
+    ctx.lineCap = "butt";
+    // active aim hint dashes
+    if(active){
+      ctx.save();
+      ctx.strokeStyle = "rgba(255,224,176,0.5)";
+      ctx.setLineDash([2,5]);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(px + dir*Math.cos(rad)*18, py - Math.sin(rad)*18);
+      ctx.lineTo(px + dir*Math.cos(rad)*36, py - Math.sin(rad)*36);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+  }
+
+  function drawHP(){
+    ctx.textAlign = "left";
+    ctx.font = "700 10px ui-rounded, system-ui, sans-serif";
+    ctx.fillStyle = "var(--muted)";
+    drawPips(12, "나", player.hp, "#ffb154", "left");
+    drawPips(W-12, "적", enemy.hp, "#d2674a", "right");
+  }
+  function drawPips(edgeX, label, hp, color, side){
+    const y = 40;
+    ctx.font = "700 10px ui-rounded, system-ui, sans-serif";
+    ctx.fillStyle = "rgba(169,151,126,0.95)";
+    if(side==="left"){
+      ctx.textAlign = "left";
+      ctx.fillText(label, edgeX, y-7);
+      for(let i=0;i<HPMAX;i++){
+        ctx.fillStyle = i < hp ? color : "rgba(255,255,255,0.14)";
+        roundRect(ctx, edgeX + i*13, y, 10, 6, 2); ctx.fill();
+      }
+    } else {
+      ctx.textAlign = "right";
+      ctx.fillStyle = "rgba(169,151,126,0.95)";
+      ctx.fillText(label, edgeX, y-7);
+      for(let i=0;i<HPMAX;i++){
+        ctx.fillStyle = i < hp ? color : "rgba(255,255,255,0.14)";
+        roundRect(ctx, edgeX - 10 - i*13, y, 10, 6, 2); ctx.fill();
+      }
+    }
+  }
+
+  function roundRect(c, x, y, w, h, r){
+    r = Math.min(r, w/2, h/2);
+    c.beginPath();
+    c.moveTo(x+r, y);
+    c.arcTo(x+w, y,   x+w, y+h, r);
+    c.arcTo(x+w, y+h, x,   y+h, r);
+    c.arcTo(x,   y+h, x,   y,   r);
+    c.arcTo(x,   y,   x+w, y,   r);
+    c.closePath();
+  }
+
+  // --- physics step -----------------------------------------------------
+  function advanceProjectile(dt){
+    const h = 1/120;
+    let t = 0;
+    while(t < dt){
+      const step = Math.min(h, dt - t);
+      t += step;
+      proj.life += step;
+      proj.vx += windAccel*step;
+      proj.vy += G*step;
+      proj.x  += proj.vx*step;
+      proj.y  += proj.vy*step;
+
+      // opponent tank hit
+      const opp = proj.owner === "player" ? enemy : player;
+      const oy = tankY(opp);
+      if(proj.x > opp.x-13 && proj.x < opp.x+13 && proj.y > oy-16 && proj.y >= oy-12){
+        boomX = proj.x; boomY = proj.y;
+        doImpact(proj.x, proj.y);
+        return;
+      }
+      // ground
+      const cx = Math.max(0, Math.min(W, proj.x));
+      if(proj.y >= terrainHeight(cx)){
+        boomX = cx; boomY = terrainHeight(cx);
+        doImpact(cx, terrainHeight(cx));
+        return;
+      }
+      if(proj.y > H + 100 || proj.life > 12){
+        boomX = proj.x; boomY = Math.min(H, proj.y);
+        doImpact(proj.x, Math.min(H-2, proj.y));
+        return;
+      }
+    }
+    // record trail point
+    proj.trail.push({x:proj.x, y:proj.y});
+    if(proj.trail.length > 220) proj.trail.shift();
+  }
+
+  // --- main loop --------------------------------------------------------
+  function frame(now){
+    let dt = (now - lastTs)/1000;
+    lastTs = now;
+    if(dt > 0.05) dt = 0.05;
+    if(dt < 0) dt = 0;
+
+    if(phase === "flying" && proj){
+      advanceProjectile(dt);
+    }
+    if(particles.length) updateParticles(dt);
+
+    if(phase === "boom" && now >= boomEnd){
+      resolveImpact();
+    } else if(phase === "enemyturn" && now >= enemyThinkEnd){
+      enemyFire();
+    }
+
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  // --- input ------------------------------------------------------------
+  angleEl.addEventListener("input", ()=>{ aimAngle = +angleEl.value; syncReadouts(); });
+  powerEl.addEventListener("input", ()=>{ aimPower = +powerEl.value; syncReadouts(); });
+  fireBtn.addEventListener("click", playerFire);
+
+  window.addEventListener("keydown", e=>{
+    if(phase === "aim" && turn === "player"){
+      const big = e.shiftKey ? 5 : 1;
+      if(e.key === "ArrowUp"){ aimAngle = Math.min(80, aimAngle + big); angleEl.value = aimAngle; syncReadouts(); e.preventDefault(); return; }
+      if(e.key === "ArrowDown"){ aimAngle = Math.max(10, aimAngle - big); angleEl.value = aimAngle; syncReadouts(); e.preventDefault(); return; }
+      if(e.key === "ArrowRight"){ aimPower = Math.min(100, aimPower + big); powerEl.value = aimPower; syncReadouts(); e.preventDefault(); return; }
+      if(e.key === "ArrowLeft"){ aimPower = Math.max(10, aimPower - big); powerEl.value = aimPower; syncReadouts(); e.preventDefault(); return; }
+      if(e.key === " " || e.key === "Enter"){ playerFire(); e.preventDefault(); return; }
+    } else if(phase === "over"){
+      if(e.key === " " || e.key === "Enter"){ newRound(); e.preventDefault(); }
+    }
+  });
+
+  document.getElementById("restart").addEventListener("click", fullReset);
+  document.getElementById("overRestart").addEventListener("click", newRound);
+
+  newRound();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
