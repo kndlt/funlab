@@ -9,90 +9,139 @@
   *{margin:0;box-sizing:border-box}
   body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;line-height:1.6;
     background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%)}
-  .wrap{max-width:920px;margin:0 auto;padding:56px 22px 100px}
+  .wrap{max-width:1000px;margin:0 auto;padding:52px 22px 100px}
   h1{font-size:34px;font-weight:800;background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .sub{color:var(--muted);font-size:14.5px;margin-top:8px;max-width:620px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-top:30px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+  .sub{color:var(--muted);font-size:14px;margin-top:8px;max-width:660px}
+  .summary{margin-top:16px;color:var(--muted);font-size:13px}
+  .filters{display:flex;gap:7px;flex-wrap:wrap;margin-top:20px}
+  .filters button{background:#1a1510;border:1px solid var(--line);color:var(--muted);border-radius:20px;padding:6px 13px;cursor:pointer;font-size:12.5px;font-family:inherit}
+  .filters button:hover{color:var(--cream);border-color:#7a5a30}
+  .filters button.on{background:var(--amber);color:#241400;border-color:var(--amber);font-weight:700}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:13px;margin-top:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px 17px;display:flex;flex-direction:column;gap:7px}
   .card .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-  .card h3{font-size:18px;color:var(--cream);font-weight:800}
+  .card h3{font-size:17px;color:var(--cream);font-weight:800}
   .ref{font-size:11px;color:var(--muted);white-space:nowrap}
-  .essence{font-size:13.5px;color:var(--ink)}
-  .nerve{font-size:11px;color:var(--amber);letter-spacing:.5px}
+  .essence{font-size:13px;color:var(--ink)}
+  .nerve{font-size:11px;color:var(--amber);letter-spacing:.4px}
   .hero{border-color:#6a4d22;background:#231a10}
   .hero h3::after{content:" ★";color:var(--amber)}
-  .play{display:inline-block;margin-top:4px;align-self:flex-start;background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;
-    font-weight:800;text-decoration:none;padding:8px 18px;border-radius:24px;font-size:13.5px}
+  .play{display:inline-block;margin-top:3px;align-self:flex-start;background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;
+    font-weight:800;text-decoration:none;padding:7px 16px;border-radius:22px;font-size:13px}
   .play:active{transform:scale(.96)}
-  .score{margin-top:6px;border-top:1px solid var(--line);padding-top:10px}
-  .score .lbl{font-size:11.5px;color:var(--muted);margin-bottom:5px}
+  .score{margin-top:5px;border-top:1px solid var(--line);padding-top:9px}
+  .score .lbl{font-size:11px;color:var(--muted);margin-bottom:5px}
   .nums{display:flex;gap:3px;flex-wrap:wrap}
-  .nums button{width:26px;height:26px;border:1px solid var(--line);background:#241c12;color:var(--ink);border-radius:7px;cursor:pointer;font-size:12px;font-weight:700}
+  .nums button{width:25px;height:25px;border:1px solid var(--line);background:#241c12;color:var(--ink);border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:700;font-family:inherit}
   .nums button:hover{border-color:#7a5a30}
   .nums button.on{background:var(--amber);color:#241400;border-color:var(--amber)}
-  .note{width:100%;margin-top:7px;background:#11100a;border:1px solid var(--line);border-radius:8px;color:var(--ink);
-    font-family:inherit;font-size:12.5px;padding:6px 9px;resize:vertical;min-height:34px}
-  .summary{margin-top:18px;color:var(--muted);font-size:13px}
-  footer{margin-top:50px;color:#7c6d58;font-size:12px;border-top:1px solid var(--line);padding-top:18px}
+  .note{width:100%;margin-top:6px;background:#11100a;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-family:inherit;font-size:12px;padding:6px 9px;resize:vertical;min-height:32px}
+  footer{margin-top:46px;color:#7c6d58;font-size:12px;border-top:1px solid var(--line);padding-top:18px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>funlab</h1>
-  <p class="sub">그랜드 리서치 온 "게임" — 검증된 게임들의 <b>에센스</b>만 한 줄로 뽑아, 에셋 0로 프로토타입. <b>각 미니겜을 플레이하고, 벌거벗고도 재밌나 1–10으로 score.</b> (이번 배치 = power/소유/discovery nerve로 bias.)</p>
+  <p class="sub">그랜드 리서치 온 "게임" — 검증된 게임들의 <b>에센스</b>만 한 줄로 뽑아, 에셋 0로 프로토타입. <b>플레이하고, 벌거벗고도 재밌나 1–10으로 score.</b> 노잼이 재밌음만큼 중요 — nerve를 분리해줌.</p>
   <div class="summary" id="summary"></div>
+  <div class="filters" id="filters"></div>
   <div class="grid" id="grid"></div>
-  <footer>점수는 이 브라우저에 저장돼(localStorage). · batch 1 — 더 추가될 예정.</footer>
+  <footer>점수는 이 브라우저에 저장돼(localStorage). · 계속 자라는 catalog — 배치마다 nerve를 넓힘.</footer>
 </div>
 
 <script>
 const GAMES=[
-  {slug:'magic', title:'마법진', ref:'(우리 가설)', hero:true,
+  // ── discovery ──
+  {slug:'magic',  title:'마법진',   ref:'(우리 가설)',     cat:'discovery',   hero:true,
    essence:'남들은 없는 마법을 *발견*해 *소유*하고, 그걸 보여준다.', nerve:'discovery ⊗ 소유 ⊗ power ⊗ flex'},
-  {slug:'merge', title:'머지', ref:'2048',
+  {slug:'alchemy',title:'조합 발견', ref:'Little Alchemy',  cat:'discovery',
+   essence:'둘을 합쳐 새로운 걸 *발견*하고, 다 모은다.', nerve:'discovery ⊗ collection'},
+  // ── mastery ──
+  {slug:'merge',  title:'머지',     ref:'2048',            cat:'mastery',
    essence:'같은 둘을 합쳐 더 큰 하나로. 판을 다스린다.', nerve:'mastery ⊗ order'},
-  {slug:'luck', title:'한 번 더?', ref:'Balatro / press-your-luck',
-   essence:'뒤집을수록 배수가 쌓인다 — 챙길까, 한 번 더 갈까.', nerve:'risk ⊗ tension ⊗ power-combo'},
-  {slug:'idle', title:'점점 강해짐', ref:'Cookie Clicker',
+  {slug:'snake',  title:'스네이크',  ref:'Snake',           cat:'mastery',
+   essence:'먹고 자라되, 내 몸에 박지 마라.', nerve:'mastery ⊗ greed'},
+  {slug:'tetris', title:'테트리스',  ref:'Tetris',          cat:'mastery',
+   essence:'떨어지는 걸 끼워 줄을 지운다.', nerve:'mastery ⊗ clear'},
+  // ── risk ──
+  {slug:'luck',   title:'한 번 더?', ref:'press-your-luck', cat:'risk',
+   essence:'뒤집을수록 배수가 쌓인다 — 챙길까, *한 번 더* 갈까.', nerve:'risk ⊗ tension'},
+  // ── deduction ──
+  {slug:'word',   title:'워들',     ref:'Wordle',          cat:'deduction',
+   essence:'피드백만 보고 숨은 단어를 *추리*한다.', nerve:'deduction ⊗ aha'},
+  {slug:'mines',  title:'지뢰찾기',  ref:'Minesweeper',     cat:'deduction',
+   essence:'숫자로 지뢰를 *추리*해 안전지대를 연다.', nerve:'deduction ⊗ logic'},
+  // ── accumulation ──
+  {slug:'idle',   title:'점점 강해짐',ref:'Cookie Clicker', cat:'accumulation',
    essence:'숫자가 오르고, 더 빨리 오르게 하는 걸 산다.', nerve:'accumulation ⊗ growth'},
-  {slug:'alchemy', title:'조합 발견', ref:'Little Alchemy',
-   essence:'둘을 합쳐 새로운 걸 발견하고, 다 모은다.', nerve:'discovery ⊗ collection'},
+  // ── creation ──
+  {slug:'sand',   title:'모래',     ref:'falling-sand',    cat:'creation',
+   essence:'단순한 규칙 → 예상 못 한 *창발* (모래·물·불).', nerve:'creation ⊗ emergence'},
+  {slug:'beat',   title:'비트 메이커',ref:'step sequencer', cat:'creation',
+   essence:'칸을 켜면 루프가 연주된다 — *비트를 만든다*.', nerve:'creation ⊗ rhythm'},
+  // ── emergence ──
+  {slug:'life',   title:'생명 게임',  ref:"Conway's Life",   cat:'emergence',
+   essence:'셀 몇 개 놓고, 그게 *살아 움직이는 걸* 본다.', nerve:'emergence ⊗ wonder'},
+  // ── nurture ──
+  {slug:'tama',   title:'다마고치',  ref:'Tamagotchi',      cat:'nurture',
+   essence:'작은 생명을 *돌본다* — 먹이고, 놀고, 반응한다.', nerve:'nurture ⊗ attachment'},
+  // ── narrative ──
+  {slug:'reigns', title:'왕의 선택',  ref:'Reigns',          cat:'narrative',
+   essence:'좌/우 *선택* → 나라가 흔들린다. 오래 버텨라.', nerve:'narrative ⊗ choice'},
+  // ── timing ──
+  {slug:'tower',  title:'탑 쌓기',   ref:'stack',           cat:'timing',
+   essence:'타이밍 맞춰 블록을 올려 탑을 쌓는다.', nerve:'timing ⊗ skill'},
 ];
 
 const grid=document.getElementById('grid');
+const filtersEl=document.getElementById('filters');
 function k(s,t){return 'funlab:'+s+':'+t}
-GAMES.forEach(g=>{
-  const card=document.createElement('div');
-  card.className='card'+(g.hero?' hero':'');
-  const saved=localStorage.getItem(k(g.slug,'score'));
-  let nums='';
-  for(let i=1;i<=10;i++) nums+=`<button data-n="${i}" class="${saved==i?'on':''}">${i}</button>`;
-  card.innerHTML=`
-    <div class="top"><h3>${g.title}</h3><span class="ref">${g.ref}</span></div>
-    <div class="essence">${g.essence.replace(/\*(.+?)\*/g,'<b>$1</b>')}</div>
-    <div class="nerve">${g.nerve}</div>
-    <a class="play" href="games/${g.slug}.html" target="_blank">▶ 플레이</a>
-    <div class="score">
-      <div class="lbl">재밌었나? (1 = 노잼, 10 = 이건 진짜)</div>
-      <div class="nums">${nums}</div>
-      <textarea class="note" placeholder="💭 한 줄 메모…">${localStorage.getItem(k(g.slug,'note'))||''}</textarea>
-    </div>`;
-  card.querySelectorAll('.nums button').forEach(b=>b.onclick=()=>{
-    localStorage.setItem(k(g.slug,'score'),b.dataset.n);
-    card.querySelectorAll('.nums button').forEach(x=>x.classList.remove('on'));
-    b.classList.add('on'); renderSummary();
-  });
-  card.querySelector('.note').onblur=e=>localStorage.setItem(k(g.slug,'note'),e.target.value);
-  grid.appendChild(card);
+let filter='전체';
+
+const cats=['전체',...[...new Set(GAMES.map(g=>g.cat))]];
+cats.forEach(c=>{
+  const b=document.createElement('button');b.textContent=c;
+  if(c===filter)b.classList.add('on');
+  b.onclick=()=>{filter=c;[...filtersEl.children].forEach(x=>x.classList.toggle('on',x.textContent===c));render()};
+  filtersEl.appendChild(b);
 });
-function renderSummary(){
-  const scored=GAMES.map(g=>+localStorage.getItem(k(g.slug,'score'))).filter(Boolean);
-  const s=document.getElementById('summary');
-  if(!scored.length){s.textContent='아직 score 0개 — 하나씩 플레이하고 점수 매겨봐.';return}
-  const avg=(scored.reduce((a,b)=>a+b,0)/scored.length).toFixed(1);
-  s.innerHTML=`scored <b>${scored.length}/${GAMES.length}</b> · 평균 <b>${avg}</b>`;
+
+function render(){
+  grid.innerHTML='';
+  GAMES.filter(g=>filter==='전체'||g.cat===filter).forEach(g=>{
+    const card=document.createElement('div');
+    card.className='card'+(g.hero?' hero':'');
+    const saved=localStorage.getItem(k(g.slug,'score'));
+    let nums='';
+    for(let i=1;i<=10;i++) nums+=`<button data-n="${i}" class="${saved==i?'on':''}">${i}</button>`;
+    card.innerHTML=`
+      <div class="top"><h3>${g.title}</h3><span class="ref">${g.ref}</span></div>
+      <div class="essence">${g.essence.replace(/\*(.+?)\*/g,'<b>$1</b>')}</div>
+      <div class="nerve">${g.nerve}</div>
+      <a class="play" href="games/${g.slug}.html" target="_blank">▶ 플레이</a>
+      <div class="score">
+        <div class="lbl">재밌었나? (1 = 노잼, 10 = 이건 진짜)</div>
+        <div class="nums">${nums}</div>
+        <textarea class="note" placeholder="💭 한 줄 메모…">${localStorage.getItem(k(g.slug,'note'))||''}</textarea>
+      </div>`;
+    card.querySelectorAll('.nums button').forEach(b=>b.onclick=()=>{
+      localStorage.setItem(k(g.slug,'score'),b.dataset.n);
+      card.querySelectorAll('.nums button').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on'); summary();
+    });
+    card.querySelector('.note').onblur=e=>localStorage.setItem(k(g.slug,'note'),e.target.value);
+    grid.appendChild(card);
+  });
 }
-renderSummary();
+function summary(){
+  const rows=GAMES.map(g=>({g,s:+localStorage.getItem(k(g.slug,'score'))})).filter(r=>r.s);
+  const s=document.getElementById('summary');
+  if(!rows.length){s.textContent=`${GAMES.length}개 프로토타입 · 아직 score 0개 — 하나씩 플레이하고 점수 매겨봐.`;return}
+  const avg=(rows.reduce((a,b)=>a+b.s,0)/rows.length).toFixed(1);
+  const top=rows.filter(r=>r.s>=8).sort((a,b)=>b.s-a.s).map(r=>`${r.g.title}(${r.s})`).join(' · ');
+  s.innerHTML=`scored <b>${rows.length}/${GAMES.length}</b> · 평균 <b>${avg}</b>${top?` · 🔥 top: ${top}`:''}`;
+}
+render();summary();
 </script>
 </body>
 </html>

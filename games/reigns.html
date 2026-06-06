@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>왕의 선택 · funlab</title>
+<style>
+  :root{
+    --bg:#14110d;--panel:#1d1812;--card:#221a11;--line:#3a3024;--cream:#f6ead8;--ink:#e7dcc8;
+    --muted:#a9977e;--amber:#ffb154;
+    --c-p:#9fd49a;--c-a:#ff6b5e;--c-m:#ffd479;--c-f:#b79cff
+  }
+  *{margin:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;line-height:1.5;
+    background-image:radial-gradient(70% 50% at 50% -8%,rgba(255,178,84,.10),transparent 60%);
+    -webkit-tap-highlight-color:transparent;overflow-x:hidden;touch-action:pan-y;user-select:none
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:30}
+  .back:hover{color:var(--ink)}
+  .wrap{max-width:480px;margin:0 auto;padding:50px 18px 40px;display:flex;flex-direction:column;gap:16px;min-height:100%}
+
+  /* ── meters ── */
+  .meters{display:flex;gap:12px;justify-content:space-between}
+  .meter{flex:1;position:relative;display:flex;flex-direction:column;align-items:center;gap:5px}
+  .meter .ico{font-size:21px;filter:grayscale(.15);transition:transform .25s}
+  .meter .track{width:100%;height:9px;background:#120f0a;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .meter .fill{height:100%;width:50%;border-radius:6px;transition:width .55s cubic-bezier(.2,.8,.3,1)}
+  #m-p .fill{background:linear-gradient(90deg,#6fae62,var(--c-p))}
+  #m-a .fill{background:linear-gradient(90deg,#c24a40,var(--c-a))}
+  #m-m .fill{background:linear-gradient(90deg,#c9a23a,var(--c-m))}
+  #m-f .fill{background:linear-gradient(90deg,#7d62c2,var(--c-f))}
+  .meter.bump .ico{transform:translateY(-4px) scale(1.25)}
+  .meter.up .track{box-shadow:0 0 10px rgba(159,212,154,.7)}
+  .meter.down .track{box-shadow:0 0 10px rgba(255,107,94,.75)}
+  .meter .delta{position:absolute;top:-15px;font-size:13px;font-weight:800;opacity:0;pointer-events:none}
+  .meter .delta.show{animation:deltaPop 1s ease forwards}
+  @keyframes deltaPop{0%{opacity:0;transform:translateY(6px) scale(.7)}25%{opacity:1}100%{opacity:0;transform:translateY(-16px) scale(1)}}
+
+  /* ── reign counter ── */
+  .reign{display:flex;justify-content:space-between;align-items:baseline;color:var(--muted);font-size:12.5px;padding:0 2px}
+  .reign b{color:var(--cream);font-size:15px;font-variant-numeric:tabular-nums}
+  .reign .best b{color:var(--c-m)}
+
+  /* ── card ── */
+  .stage{position:relative;flex:1;display:flex;align-items:center;justify-content:center;min-height:330px}
+  .card{
+    width:100%;max-width:360px;background:linear-gradient(165deg,#2a2114,#1a140d);
+    border:1px solid var(--line);border-radius:20px;padding:26px 22px 22px;
+    box-shadow:0 18px 40px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.04);
+    display:flex;flex-direction:column;align-items:center;gap:13px;cursor:grab;
+    position:relative;overflow:hidden;will-change:transform
+  }
+  .card:active{cursor:grabbing}
+  .card.dealing{animation:deal .34s cubic-bezier(.2,.9,.3,1.15)}
+  @keyframes deal{0%{transform:translateY(-30px) scale(.9) rotate(-2deg);opacity:0}100%{transform:none;opacity:1}}
+  .card.fly-left{transition:transform .35s ease,opacity .35s ease;transform:translateX(-150%) rotate(-26deg)!important;opacity:0}
+  .card.fly-right{transition:transform .35s ease,opacity .35s ease;transform:translateX(150%) rotate(26deg)!important;opacity:0}
+  .face{font-size:62px;line-height:1;margin-top:4px;filter:drop-shadow(0 6px 10px rgba(0,0,0,.4))}
+  .who{font-size:13px;color:var(--amber);letter-spacing:.6px;font-weight:700}
+  .prompt{font-size:17.5px;color:var(--cream);text-align:center;font-weight:600;min-height:74px;display:flex;align-items:center}
+  .flavor{font-size:12px;color:var(--muted);text-align:center;margin-top:-6px;min-height:16px;font-style:italic}
+
+  /* swipe peek labels */
+  .peek{position:absolute;top:50%;transform:translateY(-50%);font-size:14px;font-weight:800;
+    padding:7px 12px;border-radius:12px;opacity:0;transition:opacity .12s;max-width:44%;text-align:center;pointer-events:none}
+  .peek.l{left:12px;background:rgba(255,107,94,.16);border:1px solid var(--c-a);color:#ffd2cc}
+  .peek.r{right:12px;background:rgba(159,212,154,.16);border:1px solid var(--c-p);color:#dff3da}
+  .card.tilt-l .peek.l{opacity:1}
+  .card.tilt-r .peek.r{opacity:1}
+
+  /* ── choice buttons ── */
+  .choices{display:flex;gap:12px}
+  button.choice{flex:1;border:none;border-radius:16px;padding:15px 12px;font-family:inherit;
+    font-size:15px;font-weight:800;cursor:pointer;transition:transform .08s,filter .15s;
+    background:linear-gradient(#332715,#241b10);color:var(--cream);border:1px solid #5a4423;line-height:1.25}
+  button.choice .k{display:block;font-size:11px;color:var(--muted);font-weight:700;margin-bottom:3px;letter-spacing:1px}
+  button.choice:active{transform:scale(.96)}
+  button.choice:not(:disabled):hover{filter:brightness(1.2);border-color:#8a6a36}
+  button.choice:disabled{opacity:.45;cursor:default}
+  .hint{text-align:center;color:#7c6d58;font-size:11.5px;margin-top:-4px}
+
+  /* ── gameover ── */
+  .over{position:fixed;inset:0;background:rgba(10,8,5,.86);display:none;align-items:center;justify-content:center;
+    padding:24px;z-index:40;backdrop-filter:blur(3px)}
+  .over.show{display:flex;animation:fade .4s ease}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .obox{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:30px 26px;max-width:380px;text-align:center;
+    box-shadow:0 20px 50px rgba(0,0,0,.6)}
+  .obox .skull{font-size:50px}
+  .obox h2{font-size:22px;color:var(--c-a);margin-top:8px;font-weight:800}
+  .obox .reason{color:var(--ink);font-size:15px;margin-top:10px;line-height:1.55}
+  .obox .stat{color:var(--muted);font-size:13.5px;margin-top:16px}
+  .obox .stat b{color:var(--cream);font-size:17px;font-variant-numeric:tabular-nums}
+  .obox .rec{color:var(--c-m);font-weight:800;margin-top:6px;font-size:13.5px}
+  .obox button{margin-top:22px;border:none;border-radius:26px;padding:13px 30px;font-family:inherit;
+    font-size:16px;font-weight:800;cursor:pointer;background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a}
+  .obox button:active{transform:scale(.96)}
+</style>
+</head>
+<body>
+<a class="back" href="../index.html">← funlab</a>
+
+<div class="wrap">
+  <div class="meters">
+    <div class="meter" id="m-p"><span class="delta"></span><span class="ico">👑</span><div class="track"><div class="fill"></div></div></div>
+    <div class="meter" id="m-a"><span class="delta"></span><span class="ico">⚔️</span><div class="track"><div class="fill"></div></div></div>
+    <div class="meter" id="m-m"><span class="delta"></span><span class="ico">💰</span><div class="track"><div class="fill"></div></div></div>
+    <div class="meter" id="m-f"><span class="delta"></span><span class="ico">✝️</span><div class="track"><div class="fill"></div></div></div>
+  </div>
+
+  <div class="reign">
+    <div>재위 <b id="year">1</b>년</div>
+    <div class="best">최장 재위 <b id="best">0</b>년</div>
+  </div>
+
+  <div class="stage">
+    <div class="card dealing" id="card">
+      <div class="peek l" id="peekL">좌</div>
+      <div class="peek r" id="peekR">우</div>
+      <div class="face" id="face">👑</div>
+      <div class="who" id="who"></div>
+      <div class="prompt" id="prompt"></div>
+      <div class="flavor" id="flavor"></div>
+    </div>
+  </div>
+
+  <div class="choices">
+    <button class="choice" id="btnL"><span class="k">◀ 좌</span><span id="lblL"></span></button>
+    <button class="choice" id="btnR"><span class="k">우 ▶</span><span id="lblR"></span></button>
+  </div>
+  <div class="hint">카드를 좌·우로 밀거나 버튼을 눌러 선택 · 효과는 미터로 직접 느껴봐</div>
+</div>
+
+<div class="over" id="over">
+  <div class="obox">
+    <div class="skull" id="oFace">💀</div>
+    <h2 id="oTitle">폐위</h2>
+    <div class="reason" id="oReason"></div>
+    <div class="stat">재위 <b id="oYears">0</b>년 — 최장 <b id="oBest">0</b>년</div>
+    <div class="rec" id="oRec"></div>
+    <button id="restart">다시 왕좌에</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const $=id=>document.getElementById(id);
+  const KEY_BEST='funlab:reigns:best';
+  const METERS=['p','a','m','f'];
+
+  // 👑 백성  ⚔️ 군대  💰 금고  ✝️ 신앙
+  const DEATHS={
+    p:{lo:'👑 굶주린 백성이 성문을 부수고 너를 끌어내렸다.',
+       hi:'👑 백성이 너를 살아있는 신으로 떠받들더니, “왕은 필요 없다”며 공화국을 세웠다.'},
+    a:{lo:'⚔️ 군대가 흩어지자 적의 칼이 곧장 왕좌를 갈랐다.',
+       hi:'⚔️ 너무 강해진 장군이 군대를 끌고 와 왕관을 빼앗았다.'},
+    m:{lo:'💰 파산. 빚쟁이들이 궁을 압류하고 너를 길거리로 내쫓았다.',
+       hi:'💰 금고가 산처럼 쌓이자, 그 황금을 노린 귀족들이 너를 조용히 제거했다.'},
+    f:{lo:'✝️ 이단으로 몰린 왕은 광장 한복판에서 화형당했다.',
+       hi:'✝️ 교회가 왕보다 강해졌다. 너는 사제들의 꼭두각시로 전락해 폐위됐다.'}
+  };
+
+  // effect helper: e(백성,군대,금고,신앙)
+  function e(p,a,m,f){return {p:p||0,a:a||0,m:m||0,f:f||0}}
+
+  const CARDS=[
+    {face:'⛪',who:'대주교',prompt:'새 대성당을 지어 신의 영광을 드높이시지요. 금고만 조금 비우면 됩니다.',
+      lL:'아낀다',tL:'사제들이 입을 삐죽인다.',eL:e(-4,0,8,-12),
+      lR:'지어라',tR:'종소리에 백성이 감격한다.',eR:e(4,0,-12,14)},
+    {face:'🎖️',who:'장군',prompt:'국경에 야만족이 모였습니다. 선제공격을 허하소서.',
+      lL:'공격',tL:'피로 산 승리, 곳간은 가벼워졌다.',eL:e(-6,12,-8,0),
+      lR:'방어만',tR:'병사를 아꼈으나 변경은 불안하다.',eR:e(8,-7,4,0),
+      flavor:s=>s.a<28?'병사들 눈빛이 흔들립니다.':''},
+    {face:'🧾',who:'세금징수관',prompt:'흉년입니다. 세금을 올릴까요, 면제할까요?',
+      lL:'올려라',tL:'금고는 찼고 원성은 높아졌다.',eL:e(-14,0,18,0),
+      lR:'면제',tR:'백성은 고마워했고 곳간은 텅 비었다.',eR:e(14,0,-12,0)},
+    {face:'🌾',who:'농부',prompt:'폐하, 곳간이 비었습니다. 왕실 곡식을 풀어 주소서.',
+      lL:'나눠준다',tL:'마을마다 폐하를 칭송한다.',eL:e(14,0,-12,0),
+      lR:'거절',tR:'네 식탁은 풍성했고, 들판은 굶주렸다.',eR:e(-12,2,6,0)},
+    {face:'🕵️',who:'첩자',prompt:'이웃 왕국의 군사 기밀을 사 왔습니다. 값은 꽤 비쌉니다.',
+      lL:'산다',tL:'적의 패를 손에 쥐었다.',eL:e(0,11,-12,0),
+      lR:'안 산다',tR:'정보 없이 칼만 갈게 되었다.',eR:e(4,-8,2,0)},
+    {face:'🤡',who:'광대',prompt:'백성이 우울합니다. 성대한 축제를 여시지요!',
+      lL:'검소하게',tL:'금고는 지켰으나 거리는 조용하다.',eL:e(-8,0,8,4),
+      lR:'축제!',tR:'사흘 밤낮 잔치에 도시가 들썩였다.',eR:e(14,0,-12,-4)},
+    {face:'🧙‍♀️',who:'마녀',prompt:'왕이여, 영생의 묘약을 팔겠소. 값은… 그대 영혼의 한 조각.',
+      lL:'화형!',tL:'사제들이 흡족해한다.',eL:e(-6,0,0,14),
+      lR:'산다',tR:'쓴 약을 삼켰다. 무언가 잘못된 느낌.',eR:e(-4,0,-8,-16)},
+    {face:'👰',who:'왕비',prompt:'사촌 왕국과 혼인 동맹을 맺으시지요. 칼보다 반지가 쌉니다.',
+      lL:'거절',tR:'',tL:'사돈이 될 뻔한 나라가 등을 돌린다.',eL:e(6,-8,0,0),
+      lR:'동맹',tR:'두 왕국의 깃발이 나란히 걸렸다.',eR:e(-6,12,6,0)},
+    {face:'🧭',who:'상인',prompt:'무역로를 열면 금고가 넘칩니다. 호위 병력만 좀 빼 주십시오.',
+      lL:'연다',tL:'금화가 강물처럼 흘러든다.',eL:e(0,-12,18,0),
+      lR:'거절',tR:'안전했지만 기회는 떠나갔다.',eR:e(0,6,-6,0)},
+    {face:'🔥',who:'이단심문관',prompt:'이단자 명단을 작성했습니다. 화형에 처할까요?',
+      lL:'사면',tL:'관용이라 부르거나, 나약함이라 부르거나.',eL:e(12,0,0,-10),
+      lR:'화형',tR:'광장에 연기가 피어오른다.',eR:e(-12,0,0,14)},
+    {face:'⚔️',who:'노장군',prompt:'병사들 봉급이 석 달째 밀렸습니다. 곧 칼을 거꾸로 들 겁니다.',
+      lL:'무시',tL:'막사에서 수군대는 소리가 커진다.',eL:e(0,-16,6,0),
+      lR:'지급',tR:'금고는 비었지만 충성은 샀다.',eR:e(0,14,-10,0),
+      flavor:s=>s.m<28?'국고지기가 식은땀을 흘립니다.':''},
+    {face:'🧒',who:'어린 왕자',prompt:'아버지, 나무 칼 말고 진짜 군대를 갖고 싶어요!',
+      lL:'공부나 해라',tL:'왕자는 책을 펴며 한숨짓는다.',eL:e(4,-4,0,6),
+      lR:'키워준다',tR:'어린 손에 진짜 군기가 쥐어졌다.',eR:e(0,12,-10,0)},
+    {face:'🦠',who:'역병 의사',prompt:'역병이 번집니다. 도시를 봉쇄할까요?',
+      lL:'방치',tL:'시신을 실은 수레가 줄을 잇는다.',eL:e(-16,-4,4,0),
+      lR:'봉쇄',tR:'문을 닫았다. 굶주림과 기도가 함께 자란다.',eR:e(-8,0,-8,8)},
+    {face:'🔮',who:'점성술사',prompt:'별들이 흉조를 말합니다. 전쟁을 미루소서.',
+      lL:'무시',tL:'미신이라며 진군 나팔을 불었다.',eL:e(-4,8,0,-8),
+      lR:'따른다',tR:'하늘의 뜻에 칼을 내려놓았다.',eR:e(0,-8,0,10)},
+    {face:'🪓',who:'반란 농민',prompt:'지주들이 우리 땅을 빼앗습니다! 폐하, 누구 편이십니까?',
+      lL:'지주 편',tL:'귀족은 웃고, 들판은 이를 간다.',eL:e(-14,6,10,0),
+      lR:'농민 편',tR:'쇠스랑이 환호로 바뀌었다.',eR:e(16,-6,-8,0)},
+    {face:'🎩',who:'외국 사신',prompt:'우리 황제께 조공을 바치면 평화를 약속하지요.',
+      lL:'거절',tL:'사신이 차갑게 돌아섰다.',eL:e(8,-8,4,0),
+      lR:'바친다',tR:'금궤를 보내 칼을 거두게 했다.',eR:e(-4,6,-10,0)},
+    {face:'⚒️',who:'대장장이',prompt:'새 무기를 벼릴 강철이 필요합니다. 금고를 여시지요.',
+      lL:'거절',tL:'무딘 칼로 버텨야 한다.',eL:e(0,-8,4,0),
+      lR:'투자',tR:'무기고에 날카로운 빛이 늘었다.',eR:e(0,14,-12,0)},
+    {face:'🛐',who:'수도사',prompt:'가난한 자들을 위한 구빈원을 세우소서.',
+      lL:'거절',tL:'문 앞의 거지들이 흩어진다.',eL:e(-6,0,6,-10),
+      lR:'짓는다',tR:'빈민이 폐하의 이름을 축복한다.',eR:e(8,0,-12,12)},
+    {face:'💀',who:'도굴꾼',prompt:'선왕의 무덤에 황금이 가득합니다. 파 볼까요?',
+      lL:'그냥 둔다',tL:'죽은 자를 건드리지 않았다.',eL:e(0,0,-4,8),
+      lR:'판다',tR:'금은 손에 들어왔고, 사제들은 창백해졌다.',eR:e(-2,0,18,-16)},
+    {face:'🎻',who:'음유시인',prompt:'폐하의 위대한 업적을 노래로 남기겠습니다… 후원만 해 주시면.',
+      lL:'거절',tL:'시인은 다른 궁정으로 떠났다.',eL:e(-8,0,4,0),
+      lR:'후원',tR:'주막마다 폐하를 칭송하는 노래가 울린다.',eR:e(12,0,-8,-2)},
+    {face:'⚗️',who:'연금술사',prompt:'납을 금으로 바꾸겠습니다! 연구비만 대주시면.',
+      lL:'사기꾼!',tL:'쫓아내니 백성이 통쾌해한다.',eL:e(4,0,4,6),
+      lR:'지원',tR:'연기와 악취만 남고 금은 없었다.',eR:e(0,0,-12,-8)},
+    {face:'🏰',who:'변경 영주',prompt:'난 독립하겠소! 막고 싶으면 군대를 보내시오.',
+      lL:'독립 인정',tL:'지도에서 영지 하나가 떨어져 나갔다.',eL:e(-8,4,6,0),
+      lR:'진압',tR:'반란을 짓밟았다. 값비싼 본보기.',eR:e(-4,-8,-12,0)},
+    {face:'💉',who:'주치의',prompt:'폐하, 안색이 좋지 않습니다. 잠시 국정에서 손을 떼시지요.',
+      lL:'쉰다',tL:'기운은 돌아왔으나 나라가 표류한다.',eL:e(6,-6,-6,6),
+      lR:'계속 일한다',tR:'밤새 서류 더미와 씨름했다.',eR:e(-4,6,6,-4)},
+    {face:'😡',who:'굶주린 군중',prompt:'빵을 달라! 빵을 달라!',
+      lL:'진압한다',tL:'창끝이 함성을 잠재웠다.',eL:e(-14,8,0,-6),
+      lR:'빵을 푼다',tR:'창고를 열자 외침이 환호로 바뀐다.',eR:e(16,0,-10,0)},
+    {face:'✝️',who:'교황 사절',prompt:'십자군에 동참하소서. 이는 신의 부르심입니다.',
+      lL:'거절',tL:'사절이 파문을 운운하며 떠난다.',eL:e(0,6,6,-14),
+      lR:'참전',tR:'기사들이 성지를 향해 떠났다.',eR:e(0,-12,-8,16)},
+    {face:'🍷',who:'궁정 귀족',prompt:'궁정 무도회를 여시지요. 품격을 보여 주셔야지요.',
+      lL:'거절',tL:'귀족들이 시시하다는 표정이다.',eL:e(-6,0,8,2),
+      lR:'연다',tR:'샹들리에 아래 동맹이 맺어진다.',eR:e(8,4,-10,-4)},
+    {face:'🤴',who:'망명한 형',prompt:'동생아, 진짜 왕은 나다. 왕좌를 돌려다오.',
+      lL:'추방한다',tL:'형은 떠났고, 그 추종자들도 떠났다.',eL:e(-6,-6,4,0),
+      lR:'돈을 쥐여준다',tR:'침묵의 값으로 금고를 헐었다.',eR:e(4,0,-10,0)},
+    {face:'🧓',who:'점쟁이 노파',prompt:'좌로 가면 흥하고 우로 가면 망한다… 아니, 반대였나?',
+      lL:'좌로',tL:'노파가 알 수 없는 미소를 짓는다.',eL:e(8,0,-6,0),
+      lR:'우로',tR:'노파가 알 수 없는 미소를 짓는다.',eR:e(-6,0,8,0)},
+    {face:'📜',who:'국고지기',prompt:'금고가 너무 가득 차 도둑들이 군침을 흘립니다. 좀 쓰시지요.',
+      lL:'쌓아둔다',tL:'금화는 늘고, 그림자도 늘었다.',eL:e(-6,-4,8,0),
+      lR:'푼다',tR:'길과 다리를 놓으니 백성이 기뻐한다.',eR:e(10,4,-10,0),
+      flavor:s=>s.m>72?'창고 문이 금화 무게에 삐걱입니다.':''},
+    {face:'🌑',who:'어둠의 사제',prompt:'잊혀진 옛 신을 섬기면, 그대 군대에 두려움 없는 힘을 주겠소.',
+      lL:'거부',tL:'성호를 긋고 그를 내쫓았다.',eL:e(0,-6,0,10),
+      lR:'섬긴다',tR:'병사들 눈에 낯선 광기가 어린다.',eR:e(0,14,0,-16)}
+  ];
+
+  let state, busy=false, current=null, history=[];
+  let best=+(localStorage.getItem(KEY_BEST)||0)||0;
+  $('best').textContent=best; $('oBest').textContent=best;
+
+  function newGame(){
+    state={p:50,a:50,m:50,f:50,year:1};
+    history=[]; busy=false;
+    $('over').classList.remove('show');
+    METERS.forEach(updateFill);
+    $('year').textContent=1;
+    draw(true);
+  }
+
+  function updateFill(key){
+    $('m-'+key).querySelector('.fill').style.width=Math.max(0,Math.min(100,state[key]))+'%';
+  }
+
+  function draw(first){
+    // pick a card not seen in the last 4 draws (allows recurrence over time)
+    let c, guard=0;
+    do{ c=CARDS[Math.floor(Math.random()*CARDS.length)]; guard++; }
+    while(history.indexOf(c)>=0 && guard<30);
+    history.push(c); if(history.length>4) history.shift();
+    current=c;
+
+    $('face').textContent=c.face;
+    $('who').textContent=c.who;
+    $('prompt').textContent=c.prompt;
+    $('flavor').textContent=c.flavor?c.flavor(state):'';
+    $('lblL').textContent=c.lL;
+    $('lblR').textContent=c.lR;
+    $('btnL').disabled=false; $('btnR').disabled=false;
+
+    const card=$('card');
+    card.className='card'+(first?' dealing':'');
+    card.style.transform=''; card.style.opacity='';
+    if(!first){ card.classList.remove('dealing'); void card.offsetWidth; card.classList.add('dealing'); }
+  }
+
+  function flashMeter(key,delta){
+    if(!delta) return;
+    const el=$('m-'+key);
+    const dir=delta>0?'up':'down';
+    el.classList.remove('up','down','bump'); void el.offsetWidth;
+    el.classList.add(dir,'bump');
+    const d=el.querySelector('.delta');
+    d.textContent=(delta>0?'+':'')+delta;
+    d.style.color=delta>0?'var(--c-p)':'var(--c-a)';
+    d.classList.remove('show'); void d.offsetWidth; d.classList.add('show');
+    setTimeout(()=>el.classList.remove('up','down','bump'),520);
+  }
+
+  function choose(side){
+    if(busy||!current) return;
+    busy=true;
+    $('btnL').disabled=true; $('btnR').disabled=true;
+    const eff=side==='left'?current.eL:current.eR;
+
+    // fling card away
+    const card=$('card');
+    card.classList.add(side==='left'?'fly-left':'fly-right');
+
+    // apply effects + meter feedback
+    METERS.forEach(k=>{
+      if(eff[k]){ state[k]+=eff[k]; flashMeter(k,eff[k]); updateFill(k); }
+    });
+
+    // check death
+    let dead=null;
+    for(const k of METERS){
+      if(state[k]<=0){ dead={key:k,end:'lo'}; break; }
+      if(state[k]>=100){ dead={key:k,end:'hi'}; break; }
+    }
+
+    if(dead){
+      setTimeout(()=>gameOver(dead),560);
+      return;
+    }
+
+    state.year++;
+    $('year').textContent=state.year;
+    setTimeout(()=>{ busy=false; draw(false); },420);
+  }
+
+  function gameOver(dead){
+    const reason=DEATHS[dead.key][dead.end];
+    const yrs=state.year;
+    let rec=false;
+    if(yrs>best){ best=yrs; localStorage.setItem(KEY_BEST,best); rec=true; }
+    $('best').textContent=best;
+    $('oReason').textContent=reason;
+    $('oYears').textContent=yrs;
+    $('oBest').textContent=best;
+    $('oTitle').textContent=dead.end==='hi'?'권좌를 빼앗기다':'폐위';
+    $('oFace').textContent=dead.end==='hi'?'👑':'💀';
+    $('oRec').textContent=rec?'🏆 새로운 최장 재위 기록!':'';
+    $('over').classList.add('show');
+  }
+
+  $('btnL').onclick=()=>choose('left');
+  $('btnR').onclick=()=>choose('right');
+  $('restart').onclick=newGame;
+
+  document.addEventListener('keydown',e=>{
+    if($('over').classList.contains('show')){
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); newGame(); }
+      return;
+    }
+    if(e.repeat||busy) return;
+    if(e.key==='ArrowLeft'){ e.preventDefault(); choose('left'); }
+    else if(e.key==='ArrowRight'){ e.preventDefault(); choose('right'); }
+  });
+
+  // ── drag / swipe ──
+  (function(){
+    const card=$('card');
+    let dragging=false, startX=0, dx=0;
+    const TH=100;
+
+    function down(x){ if(busy) return; dragging=true; startX=x; dx=0; card.style.transition='none'; }
+    function move(x){
+      if(!dragging) return;
+      dx=x-startX;
+      const rot=dx/22;
+      card.style.transform='translateX('+dx+'px) rotate('+rot+'deg)';
+      card.classList.toggle('tilt-l',dx<-24);
+      card.classList.toggle('tilt-r',dx>24);
+    }
+    function up(){
+      if(!dragging) return;
+      dragging=false;
+      card.classList.remove('tilt-l','tilt-r');
+      card.style.transition='';
+      if(dx<=-TH){ choose('left'); }
+      else if(dx>=TH){ choose('right'); }
+      else { card.style.transform=''; }
+      dx=0;
+    }
+    card.addEventListener('pointerdown',e=>{ down(e.clientX); card.setPointerCapture&&card.setPointerCapture(e.pointerId); });
+    card.addEventListener('pointermove',e=>move(e.clientX));
+    card.addEventListener('pointerup',up);
+    card.addEventListener('pointercancel',up);
+  })();
+
+  newGame();
+})();
+</script>
+</body>
+</html>

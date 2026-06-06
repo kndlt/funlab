@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>생명 게임 · funlab</title>
+<style>
+  :root{
+    --bg:#14110d;--panel:#1d1812;--line:#3a3024;--cream:#f6ead8;--ink:#e7dcc8;
+    --muted:#a9977e;--amber:#ffb154;--gold:#ffd479
+  }
+  *{margin:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;line-height:1.5;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    min-height:100%;-webkit-tap-highlight-color:transparent;overflow-x:hidden
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:20}
+  .back:hover{color:var(--ink)}
+  .wrap{max-width:880px;margin:0 auto;padding:54px 18px 50px;display:flex;flex-direction:column;gap:14px}
+  .head{text-align:center}
+  h1{font-size:27px;font-weight:800;background:linear-gradient(#fff3df,#ffcf8a);
+     -webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);font-size:12.5px;margin-top:4px}
+
+  /* stats */
+  .stats{display:flex;gap:12px;justify-content:center}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:9px 18px;text-align:center;min-width:108px}
+  .stat .lbl{font-size:11px;color:var(--muted);letter-spacing:.5px}
+  .stat .val{font-size:24px;font-weight:800;margin-top:1px;font-variant-numeric:tabular-nums}
+  #gen .val{color:var(--cream)}
+  #pop .val{color:var(--amber)}
+
+  /* board */
+  .boardwrap{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 12px 30px rgba(0,0,0,.4)}
+  canvas{display:block;width:100%;height:auto;border-radius:9px;background:#0d0b07;cursor:crosshair;
+    touch-action:none}
+
+  /* controls */
+  .controls{display:flex;flex-wrap:wrap;gap:9px;align-items:center;justify-content:center}
+  button.btn{border:1px solid var(--line);border-radius:24px;padding:11px 18px;font-family:inherit;
+    font-size:14px;font-weight:800;cursor:pointer;transition:transform .08s,filter .15s;
+    background:linear-gradient(#2a2114,#1c160e);color:var(--ink)}
+  button.btn:active{transform:scale(.95)}
+  button.btn:hover{filter:brightness(1.18)}
+  button.btn.primary{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;border-color:#6a4d22}
+  .ghost{background:none;border:1px solid var(--line);color:var(--muted)}
+  .ghost:hover{color:var(--ink)}
+
+  .speedrow{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12.5px}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:150px;height:4px;border-radius:3px;
+    background:#3a3024;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+    background:var(--amber);cursor:pointer;box-shadow:0 0 8px rgba(255,178,84,.5)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;border:none;
+    background:var(--amber);cursor:pointer}
+  .speedval{color:var(--cream);font-weight:700;font-variant-numeric:tabular-nums;min-width:54px;text-align:right}
+
+  /* presets */
+  .presets{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center}
+  .plabel{color:var(--muted);font-size:12px;margin-right:2px}
+  button.preset{border:1px solid var(--line);border-radius:20px;padding:7px 13px;font-family:inherit;
+    font-size:12.5px;font-weight:700;cursor:pointer;background:#1a1510;color:var(--amber);transition:filter .15s}
+  button.preset:hover{filter:brightness(1.3);border-color:#7a5a30}
+
+  .hint{text-align:center;color:#7c6d58;font-size:11.5px;margin-top:2px}
+  .hint b{color:var(--muted)}
+</style>
+</head>
+<body>
+<a class="back" href="../index.html">← funlab</a>
+
+<div class="wrap">
+  <div class="head">
+    <h1>생명 게임</h1>
+    <div class="sub">셀 몇 개 놓고, 그게 살아 움직이는 걸 본다 — Conway's Game of Life</div>
+  </div>
+
+  <div class="stats">
+    <div class="stat" id="gen"><div class="lbl">세대</div><div class="val" id="genVal">0</div></div>
+    <div class="stat" id="pop"><div class="lbl">살아있는 셀</div><div class="val" id="popVal">0</div></div>
+  </div>
+
+  <div class="boardwrap">
+    <canvas id="board"></canvas>
+  </div>
+
+  <div class="controls">
+    <button class="btn primary" id="playBtn">▶ 재생</button>
+    <button class="btn" id="stepBtn">⏭ 한 스텝</button>
+    <div class="speedrow">
+      <span>속도</span>
+      <input type="range" id="speed" min="1" max="30" value="11">
+      <span class="speedval" id="speedVal">11/s</span>
+    </div>
+    <button class="btn ghost" id="randBtn">🎲 랜덤</button>
+    <button class="btn ghost" id="clearBtn">🧹 비우기</button>
+  </div>
+
+  <div class="presets">
+    <span class="plabel">패턴 놓기:</span>
+    <button class="preset" data-p="glider">글라이더</button>
+    <button class="preset" data-p="blinker">점멸기</button>
+    <button class="preset" data-p="pulsar">펄서</button>
+    <button class="preset" data-p="lwss">우주선</button>
+    <button class="preset" data-p="gun">글라이더 건</button>
+  </div>
+
+  <div class="hint">
+    클릭·드래그로 셀을 칠한다 (Shift+드래그 = 지우기) · 패턴 버튼은 마우스 위치(없으면 중앙)에 놓임 ·
+    가장자리는 <b>토러스</b>라 글라이더가 끝에서 반대편으로 이어진다 · 단축키: <b>Space</b> 재생/멈춤, <b>→</b> 한 스텝
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const $=id=>document.getElementById(id);
+
+  // ---- grid config ----
+  const COLS=60, ROWS=40;
+  let cell=14;            // px per cell (recomputed on resize)
+  const canvas=$('board'), ctx=canvas.getContext('2d');
+
+  // two buffers, Uint8 flat arrays (toroidal wrap)
+  let grid=new Uint8Array(COLS*ROWS);
+  let next=new Uint8Array(COLS*ROWS);
+  // age buffer: how many gens a cell has been continuously alive (for glow falloff)
+  let age=new Uint8Array(COLS*ROWS);
+
+  const idx=(x,y)=>y*COLS+x;
+
+  let generation=0, population=0;
+  let running=false, timer=null, fps=11;
+  let mouseCell=null; // {x,y} last known cursor cell, for preset placement
+
+  // ---- sizing: keep canvas crisp on hi-dpi, fit width ----
+  function resize(){
+    const wrap=canvas.parentElement;
+    const avail=Math.min(wrap.clientWidth-24, 820);
+    cell=Math.max(6, Math.floor(avail/COLS));
+    const cssW=cell*COLS, cssH=cell*ROWS;
+    const dpr=window.devicePixelRatio||1;
+    canvas.style.width=cssW+'px';
+    canvas.style.height=cssH+'px';
+    canvas.width=Math.round(cssW*dpr);
+    canvas.height=Math.round(cssH*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw();
+  }
+
+  // ---- core: B3/S23 step with toroidal neighbours ----
+  function step(){
+    let pop=0;
+    for(let y=0;y<ROWS;y++){
+      const yu=(y-1+ROWS)%ROWS, yd=(y+1)%ROWS;
+      for(let x=0;x<COLS;x++){
+        const xl=(x-1+COLS)%COLS, xr=(x+1)%COLS;
+        const n =
+          grid[idx(xl,yu)]+grid[idx(x,yu)]+grid[idx(xr,yu)]+
+          grid[idx(xl,y )]+              grid[idx(xr,y )]+
+          grid[idx(xl,yd)]+grid[idx(x,yd)]+grid[idx(xr,yd)];
+        const alive=grid[idx(x,y)];
+        // B3/S23: born on exactly 3, survives on 2 or 3
+        const live=(alive ? (n===2||n===3) : (n===3)) ? 1 : 0;
+        const i=idx(x,y);
+        next[i]=live;
+        if(live){
+          pop++;
+          age[i]=alive ? Math.min(age[i]+1,255) : 1; // reset age when newly born
+        } else {
+          age[i]=0;
+        }
+      }
+    }
+    const t=grid; grid=next; next=t;
+    population=pop;
+    generation++;
+    updateStats();
+    draw();
+  }
+
+  // ---- rendering: warm amber glow, brighter when freshly born ----
+  function draw(){
+    const w=cell*COLS, h=cell*ROWS;
+    ctx.clearRect(0,0,w,h);
+    // subtle grid lines
+    ctx.fillStyle='#0d0b07';
+    ctx.fillRect(0,0,w,h);
+    if(cell>=9){
+      ctx.strokeStyle='rgba(255,255,255,.035)';
+      ctx.lineWidth=1;
+      ctx.beginPath();
+      for(let x=0;x<=COLS;x++){ ctx.moveTo(x*cell+.5,0); ctx.lineTo(x*cell+.5,h); }
+      for(let y=0;y<=ROWS;y++){ ctx.moveTo(0,y*cell+.5); ctx.lineTo(w,y*cell+.5); }
+      ctx.stroke();
+    }
+    // cells
+    for(let y=0;y<ROWS;y++){
+      for(let x=0;x<COLS;x++){
+        const i=idx(x,y);
+        if(!grid[i]) continue;
+        const px=x*cell, py=y*cell;
+        // freshly born cells (age 1) flare gold; settled cells warm amber
+        const a=age[i];
+        const fresh = a===1;
+        const r=Math.max(2, cell*0.46);
+        // glow
+        const g=ctx.createRadialGradient(px+cell/2,py+cell/2,0,px+cell/2,py+cell/2,r*1.6);
+        if(fresh){
+          g.addColorStop(0,'rgba(255,224,150,.95)');
+          g.addColorStop(.55,'rgba(255,178,84,.55)');
+          g.addColorStop(1,'rgba(255,140,40,0)');
+        } else {
+          g.addColorStop(0,'rgba(255,190,110,.92)');
+          g.addColorStop(.6,'rgba(255,150,60,.4)');
+          g.addColorStop(1,'rgba(220,120,40,0)');
+        }
+        ctx.fillStyle=g;
+        ctx.fillRect(px-cell*0.3,py-cell*0.3,cell*1.6,cell*1.6);
+        // solid core
+        const inset=Math.max(1, cell*0.16);
+        ctx.fillStyle=fresh?'#ffe6b0':'#ffb154';
+        roundRect(px+inset,py+inset,cell-inset*2,cell-inset*2,Math.max(1,cell*0.18));
+        ctx.fill();
+      }
+    }
+  }
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  function countPop(){
+    let p=0; for(let i=0;i<grid.length;i++) p+=grid[i]; return p;
+  }
+  function updateStats(){
+    $('genVal').textContent=generation;
+    $('popVal').textContent=population;
+  }
+
+  // ---- play loop ----
+  function tick(){
+    if(!running) return;
+    step();
+    timer=setTimeout(tick, 1000/fps);
+  }
+  function play(){
+    if(running) return;
+    running=true;
+    $('playBtn').innerHTML='⏸ 멈춤';
+    $('playBtn').classList.remove('primary');
+    tick();
+  }
+  function pause(){
+    running=false;
+    clearTimeout(timer);
+    $('playBtn').innerHTML='▶ 재생';
+    $('playBtn').classList.add('primary');
+  }
+  function toggle(){ running?pause():play(); }
+
+  // ---- editing ----
+  function setCell(x,y,v){
+    if(x<0||x>=COLS||y<0||y>=ROWS) return;
+    const i=idx(x,y);
+    grid[i]=v;
+    age[i]=v?1:0;
+  }
+  function eventCell(e){
+    const rect=canvas.getBoundingClientRect();
+    const cx=(e.clientX-rect.left)/rect.width*COLS;
+    const cy=(e.clientY-rect.top)/rect.height*ROWS;
+    return {x:Math.floor(cx), y:Math.floor(cy)};
+  }
+
+  let painting=false, paintVal=1;
+  function pointerDown(e){
+    e.preventDefault();
+    const c=eventCell(e);
+    paintVal=e.shiftKey?0:1;
+    painting=true;
+    setCell(c.x,c.y,paintVal);
+    population=countPop(); updateStats(); draw();
+  }
+  function pointerMove(e){
+    const c=eventCell(e);
+    if(c.x>=0&&c.x<COLS&&c.y>=0&&c.y<ROWS) mouseCell=c;
+    if(!painting) return;
+    setCell(c.x,c.y,paintVal);
+    population=countPop(); updateStats(); draw();
+  }
+  function pointerUp(){ painting=false; }
+
+  canvas.addEventListener('pointerdown',pointerDown);
+  canvas.addEventListener('pointermove',pointerMove);
+  window.addEventListener('pointerup',pointerUp);
+  canvas.addEventListener('pointerleave',()=>{ mouseCell=null; });
+
+  // ---- presets (relative coords) ----
+  const PATTERNS={
+    blinker:[[0,0],[1,0],[2,0]],
+    glider:[[1,0],[2,1],[0,2],[1,2],[2,2]],
+    // lightweight spaceship
+    lwss:[[1,0],[4,0],[0,1],[0,2],[4,2],[0,3],[1,3],[2,3],[3,3]],
+    pulsar:(function(){
+      // classic 13x13 pulsar
+      const base=[2,3,4,8,9,10];
+      const pts=[];
+      // horizontal bars (rows 0,5,7,12) over column groups
+      const rows=[0,5,7,12];
+      rows.forEach(r=>base.forEach(c=>pts.push([c,r])));
+      // vertical bars (cols 0,5,7,12) over row groups
+      const cols=[0,5,7,12];
+      cols.forEach(c=>base.forEach(r=>pts.push([c,r])));
+      return pts;
+    })(),
+    gun:gosperGun()
+  };
+  function gosperGun(){
+    // Gosper glider gun — 36x9 bounding box, emits gliders to lower-right
+    return [
+      [24,0],
+      [22,1],[24,1],
+      [12,2],[13,2],[20,2],[21,2],[34,2],[35,2],
+      [11,3],[15,3],[20,3],[21,3],[34,3],[35,3],
+      [0,4],[1,4],[10,4],[16,4],[20,4],[21,4],
+      [0,5],[1,5],[10,5],[14,5],[16,5],[17,5],[22,5],[24,5],
+      [10,6],[16,6],[24,6],
+      [11,7],[15,7],
+      [12,8],[13,8]
+    ];
+  }
+  function patternBounds(pts){
+    let mx=0,my=0;
+    pts.forEach(([x,y])=>{ if(x>mx)mx=x; if(y>my)my=y; });
+    return {w:mx+1,h:my+1};
+  }
+  function placePattern(name){
+    const pts=PATTERNS[name];
+    if(!pts) return;
+    const b=patternBounds(pts);
+    // anchor: cursor cell if known, else center; clamp so it fits, then wrap-safe
+    let ax, ay;
+    if(mouseCell){
+      ax=mouseCell.x-Math.floor(b.w/2);
+      ay=mouseCell.y-Math.floor(b.h/2);
+    } else {
+      ax=Math.floor((COLS-b.w)/2);
+      ay=Math.floor((ROWS-b.h)/2);
+    }
+    pts.forEach(([x,y])=>{
+      const gx=((ax+x)%COLS+COLS)%COLS;
+      const gy=((ay+y)%ROWS+ROWS)%ROWS;
+      setCell(gx,gy,1);
+    });
+    population=countPop(); updateStats(); draw();
+  }
+  document.querySelectorAll('.preset').forEach(b=>{
+    b.onclick=()=>placePattern(b.dataset.p);
+  });
+
+  // ---- random / clear ----
+  function randomFill(){
+    for(let i=0;i<grid.length;i++){
+      const v=Math.random()<0.28?1:0;
+      grid[i]=v; age[i]=v?1:0;
+    }
+    generation=0; population=countPop(); updateStats(); draw();
+  }
+  function clearAll(){
+    grid.fill(0); next.fill(0); age.fill(0);
+    generation=0; population=0; updateStats(); draw();
+  }
+  $('randBtn').onclick=()=>{ randomFill(); };
+  $('clearBtn').onclick=()=>{ pause(); clearAll(); };
+  $('playBtn').onclick=toggle;
+  $('stepBtn').onclick=()=>{ pause(); step(); };
+
+  // ---- speed ----
+  $('speed').addEventListener('input',e=>{
+    fps=+e.target.value;
+    $('speedVal').textContent=fps+'/s';
+  });
+
+  // ---- keyboard ----
+  document.addEventListener('keydown',e=>{
+    if(e.target.tagName==='INPUT') return;
+    if(e.code==='Space'){ e.preventDefault(); toggle(); }
+    else if(e.key==='ArrowRight'){ e.preventDefault(); pause(); step(); }
+  });
+
+  window.addEventListener('resize',resize);
+
+  // ---- boot: a glider gun running by default is mesmerizing ----
+  resize();
+  placePatternAt('gun', 1, 1);
+  function placePatternAt(name,ax,ay){
+    const pts=PATTERNS[name];
+    pts.forEach(([x,y])=>{
+      const gx=((ax+x)%COLS+COLS)%COLS;
+      const gy=((ay+y)%ROWS+ROWS)%ROWS;
+      setCell(gx,gy,1);
+    });
+    population=countPop(); updateStats(); draw();
+  }
+  play();
+})();
+</script>
+</body>
+</html>

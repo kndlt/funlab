@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>스네이크 · Snake</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:1/1;touch-action:none;overflow:hidden}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">스네이크<span class="ref">먹고 자라되, 내 몸에 박지 마라 · Snake</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">점수</div><div class="val" id="score">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">방향키 / WASD / 스와이프</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <canvas id="cv"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">먹을수록 길어지고, 길어질수록 빨라진다. 벽과 제 몸이 유일한 적.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const N = 20;                       // grid is N x N cells
+  const BEST_KEY = "funlab:snake:best";
+  const BASE_TICK = 160;              // ms per step at score 0
+  const MIN_TICK  = 75;               // fastest allowed
+  const ACCEL     = 2.4;              // ms shaved per point eaten
+
+  const boardEl  = document.getElementById("board");
+  const cv       = document.getElementById("cv");
+  const ctx      = cv.getContext("2d");
+  const scoreEl  = document.getElementById("score");
+  const bestEl   = document.getElementById("best");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+
+  // --- pixel sizing (handles retina + responsive board) -----------------
+  let px = 0;        // device pixels per cell
+  function resize(){
+    const rect = boardEl.getBoundingClientRect();
+    const dpr  = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const size = Math.round(rect.width * dpr);
+    cv.width  = size;
+    cv.height = size;
+    px = size / N;
+  }
+  window.addEventListener("resize", resize);
+
+  // --- state ------------------------------------------------------------
+  let snake;        // array of {x,y}, head first (current cells)
+  let prevSnake;    // positions one tick ago, for interpolation
+  let dir;          // current applied direction {x,y}
+  let queue;        // up to 2 buffered turns, validated on entry
+  let food;         // {x,y}
+  let score, best;
+  let state;        // 'ready' | 'playing' | 'over'
+  let lastTick;     // timestamp of last logic step
+  let tickInterval; // current ms per step
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  function tickFor(s){ return Math.max(MIN_TICK, BASE_TICK - s * ACCEL); }
+
+  function init(){
+    resize();
+    const cx = Math.floor(N/2), cy = Math.floor(N/2);
+    // start length 3, laid out so it reads as moving right
+    snake = [ {x:cx, y:cy}, {x:cx-1, y:cy}, {x:cx-2, y:cy} ];
+    prevSnake = snake.map(s => ({x:s.x, y:s.y}));
+    dir = {x:1, y:0};
+    queue = [];
+    score = 0;
+    tickInterval = tickFor(0);
+    state = "ready";
+    placeFood();
+    overlay.classList.remove("show");
+    updateScores();
+    lastTick = performance.now();
+    render(0);
+  }
+
+  function placeFood(){
+    const occupied = new Set(snake.map(s => s.y*N + s.x));
+    const free = [];
+    for(let i=0;i<N*N;i++) if(!occupied.has(i)) free.push(i);
+    if(!free.length){ food = null; return; } // board full = perfect win
+    const idx = free[(Math.random()*free.length)|0];
+    food = {x: idx % N, y: (idx/N)|0};
+  }
+
+  function updateScores(){
+    scoreEl.textContent = score;
+    bestEl.textContent = best;
+  }
+
+  // --- turn input -------------------------------------------------------
+  // Validate each turn against the LAST intended heading (tail of queue, or
+  // current dir). This blocks reversing into the neck even if two turns land
+  // inside one tick (e.g. up then left while moving right is fine; up then
+  // down is not — the second is rejected as a reversal of the first).
+  function turn(nx, ny){
+    if(state === "over") return;
+    const ref = queue.length ? queue[queue.length-1] : dir;
+    if(nx === -ref.x && ny === -ref.y) return;  // reversal -> ignore
+    if(nx === ref.x && ny === ref.y) return;     // no-op duplicate
+    if(queue.length >= 2) return;                // don't buffer endlessly
+    queue.push({x:nx, y:ny});
+    if(state === "ready"){
+      state = "playing";
+      lastTick = performance.now();
+    }
+  }
+
+  function step(){
+    // adopt the next buffered turn (already validated as non-reversing)
+    if(queue.length) dir = queue.shift();
+
+    const head = snake[0];
+    const nx = head.x + dir.x;
+    const ny = head.y + dir.y;
+
+    // wall collision
+    if(nx < 0 || ny < 0 || nx >= N || ny >= N){ gameOver(); return; }
+
+    const ate = food && nx === food.x && ny === food.y;
+
+    // self collision: check against body cells that will still be occupied.
+    // The tail moves away this tick unless we grow, so it's safe to enter —
+    // except when growing (tail stays) it remains a wall.
+    const bodyLen = ate ? snake.length : snake.length - 1;
+    for(let i=0;i<bodyLen;i++){
+      if(snake[i].x === nx && snake[i].y === ny){ gameOver(); return; }
+    }
+
+    prevSnake = snake.map(s => ({x:s.x, y:s.y}));
+    snake.unshift({x:nx, y:ny});
+    if(ate){
+      score += 1;
+      tickInterval = tickFor(score);
+      if(score > best){ best = score; localStorage.setItem(BEST_KEY, String(best)); }
+      updateScores();
+      placeFood();
+      if(!food){ winGame(); return; }
+    } else {
+      snake.pop();
+    }
+  }
+
+  function gameOver(){
+    state = "over";
+    overMsg.innerHTML = `게임 끝 · 점수 <b>${score}</b>`;
+    overSmall.textContent = score >= best && score > 0
+      ? "최고 기록 경신!" : "내 몸에 박았다. 다시.";
+    overlay.classList.add("show");
+  }
+
+  function winGame(){
+    state = "over";
+    overMsg.innerHTML = `완벽 · 점수 <b>${score}</b>`;
+    overSmall.textContent = "판을 가득 채웠다. 더 자랄 곳이 없다.";
+    overlay.classList.add("show");
+  }
+
+  // --- rendering --------------------------------------------------------
+  // frac = interpolation progress (0..1) toward the next logical cell.
+  function render(frac){
+    const W = cv.width;
+    ctx.clearRect(0,0,W,W);
+
+    // subtle grid
+    ctx.strokeStyle = "rgba(58,48,36,0.55)";
+    ctx.lineWidth = Math.max(1, px*0.03);
+    ctx.beginPath();
+    for(let i=1;i<N;i++){
+      const p = Math.round(i*px) + 0.5;
+      ctx.moveTo(p,0); ctx.lineTo(p,W);
+      ctx.moveTo(0,p); ctx.lineTo(W,p);
+    }
+    ctx.stroke();
+
+    // food (warm apple with glow + pulse)
+    if(food){
+      const t = performance.now()/360;
+      const pulse = 0.5 + 0.5*Math.sin(t);
+      const fx = (food.x + 0.5) * px;
+      const fy = (food.y + 0.5) * px;
+      const r  = px * (0.30 + 0.04*pulse);
+      ctx.save();
+      ctx.shadowColor = "rgba(255,177,84,0.85)";
+      ctx.shadowBlur  = px * (0.6 + 0.5*pulse);
+      const g = ctx.createRadialGradient(fx-r*0.3, fy-r*0.3, r*0.1, fx, fy, r);
+      g.addColorStop(0, "#ffd9a0");
+      g.addColorStop(1, "#ff8a3d");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(fx, fy, r, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // snake: interpolate each segment from prevSnake[i] -> snake[i]
+    const f = (state === "playing") ? Math.min(1, frac) : 0;
+    const n = snake.length;
+    const pad = px * 0.10;
+    const seg = px - pad*2;
+    const rad = seg * 0.32;
+
+    for(let i = n-1; i >= 0; i--){
+      const cur = snake[i];
+      const prev = prevSnake[i] || cur;
+      const cx = (prev.x + (cur.x - prev.x)*f) * px + pad;
+      const cy = (prev.y + (cur.y - prev.y)*f) * px + pad;
+
+      // head bright amber, body fading warm gradient toward the tail
+      const tnorm = n > 1 ? i/(n-1) : 0;
+      let fill;
+      if(i === 0){
+        fill = "#ffc879";
+      } else {
+        // mix amber -> deep ember
+        const r = Math.round(0xe8 - tnorm*0x60);
+        const g = Math.round(0x8a - tnorm*0x44);
+        const b = Math.round(0x3d - tnorm*0x1a);
+        fill = `rgb(${r},${g},${b})`;
+      }
+      ctx.fillStyle = fill;
+      roundRect(ctx, cx, cy, seg, seg, rad);
+      ctx.fill();
+
+      if(i === 0) drawEyes(cx, cy, seg);
+    }
+  }
+
+  function drawEyes(cx, cy, seg){
+    const ex = dir.x, ey = dir.y;
+    const cxm = cx + seg/2, cym = cy + seg/2;
+    const off = seg*0.18, r = seg*0.10;
+    // perpendicular axis for the two eyes
+    const perpx = ey, perpy = ex;
+    const fwd = seg*0.16;
+    ctx.fillStyle = "#3a230a";
+    for(const s of [-1, 1]){
+      const x = cxm + ex*fwd + perpx*off*s;
+      const y = cym + ey*fwd + perpy*off*s;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  function roundRect(c, x, y, w, h, r){
+    r = Math.min(r, w/2, h/2);
+    c.beginPath();
+    c.moveTo(x+r, y);
+    c.arcTo(x+w, y,   x+w, y+h, r);
+    c.arcTo(x+w, y+h, x,   y+h, r);
+    c.arcTo(x,   y+h, x,   y,   r);
+    c.arcTo(x,   y,   x+w, y,   r);
+    c.closePath();
+  }
+
+  // --- main loop --------------------------------------------------------
+  function frame(now){
+    if(state === "playing"){
+      let guard = 0;
+      while(now - lastTick >= tickInterval && state === "playing" && guard < 4){
+        step();
+        lastTick += tickInterval;
+        guard++;
+      }
+      const frac = (now - lastTick) / tickInterval;
+      render(frac);
+    } else {
+      render(0);  // ready / over: static (keeps food pulsing)
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // --- input bindings ---------------------------------------------------
+  const KEYMAP = {
+    ArrowLeft:[-1,0], ArrowRight:[1,0], ArrowUp:[0,-1], ArrowDown:[0,1],
+    a:[-1,0], d:[1,0], w:[0,-1], s:[0,1],
+    A:[-1,0], D:[1,0], W:[0,-1], S:[0,1],
+    h:[-1,0], l:[1,0], k:[0,-1], j:[0,1]
+  };
+  window.addEventListener("keydown", e=>{
+    const m = KEYMAP[e.key];
+    if(m){ e.preventDefault(); turn(m[0], m[1]); }
+  });
+
+  // touch swipe
+  let tStart = null;
+  boardEl.addEventListener("touchstart", e=>{
+    const t = e.changedTouches[0];
+    tStart = {x:t.clientX, y:t.clientY};
+  }, {passive:true});
+  boardEl.addEventListener("touchmove", e=>{
+    // swipe steering: act on first decisive move, then reset for next swipe
+    if(!tStart) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - tStart.x, dy = t.clientY - tStart.y;
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    if(Math.max(ax, ay) < 22) return;
+    if(ax > ay) turn(dx > 0 ? 1 : -1, 0);
+    else        turn(0, dy > 0 ? 1 : -1);
+    tStart = {x:t.clientX, y:t.clientY};
+  }, {passive:true});
+  boardEl.addEventListener("touchend", ()=>{ tStart = null; }, {passive:true});
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

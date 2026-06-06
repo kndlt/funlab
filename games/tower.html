@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>탑 쌓기 · stack</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 28px;
+    touch-action:none; -webkit-user-select:none; user-select:none; overflow:hidden;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:20}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:26px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:12px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .wrap{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:3/4;max-height:74vh;overflow:hidden;touch-action:none;cursor:pointer}
+  canvas{display:block;width:100%;height:100%}
+  .over{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:5;
+    animation:fade .25s ease;padding:20px;text-align:center}
+  .over.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .over .msg{font-size:24px;font-weight:800;color:var(--cream)}
+  .over .msg b{color:var(--amber)}
+  .over .sub{font-size:13px;color:var(--muted);margin-top:-6px}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:9px 22px;border-radius:22px;font-size:14px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .foot{margin-top:12px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">탑 쌓기<span class="ref">타이밍 맞춰 블록을 올린다 · stack</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">층</div><div class="val" id="score">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="wrap" id="wrap">
+    <canvas id="cv"></canvas>
+    <div class="over" id="over">
+      <div class="msg" id="overMsg"></div>
+      <div class="sub" id="overSub"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">탭 / 클릭 / Space 로 블록을 떨어뜨려 · 딱 맞추면 <b style="color:var(--amber)">perfect!</b></div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const BEST_KEY = "funlab:tower:best";
+
+  const wrap = document.getElementById("wrap");
+  const cv = document.getElementById("cv");
+  const ctx = cv.getContext("2d");
+  const scoreEl = document.getElementById("score");
+  const bestEl = document.getElementById("best");
+  const overEl = document.getElementById("over");
+  const overMsgEl = document.getElementById("overMsg");
+  const overSubEl = document.getElementById("overSub");
+
+  // logical (CSS px) size of the canvas; set on resize
+  let W = 0, H = 0, dpr = 1;
+
+  // --- tunables ---------------------------------------------------------
+  const BLOCK_H      = 34;     // height of each block (logical px)
+  const PERFECT      = 7;      // |delta| under this = perfect
+  const REGROW       = 8;      // px width regained on a perfect
+  const BASE_SPEED   = 150;    // px/sec horizontal slide at start
+  const SPEED_STEP   = 7;      // +px/sec per floor
+  const MAX_SPEED    = 420;
+  const MARGIN       = 8;      // slide bounds inset
+  const BASE_W_FRAC  = 0.56;   // base block width as fraction of W
+  const BASE_HUE     = 30;     // amber-ish start
+  const HUE_STEP     = 5.5;    // hue shift per floor
+
+  // --- state ------------------------------------------------------------
+  let blocks;      // placed blocks, blocks[0] = base. {x,w,hue}
+  let moving;      // currently sliding block, or null
+  let falling;     // sliced pieces flying off  [{x,y,w,h,vx,vy,vr,rot,hue,a}]
+  let cam, camTarget;
+  let score, best, combo;
+  let state;       // 'play' | 'over'
+  let flash;       // 0..1 perfect flash intensity
+  let floaters;    // floating "perfect!" texts [{x,y,a,t}]
+  let last;        // rAF timestamp
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  function resize(){
+    const r = wrap.getBoundingClientRect();
+    W = r.width; H = r.height;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width  = Math.round(W * dpr);
+    cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  // screen Y of the TOP edge of block index i (before camera applied)
+  function naturalTop(i){
+    return H - 60 - (i + 1) * BLOCK_H;
+  }
+  // where we want the most-recently-placed block to sit on screen
+  function desiredScreenTop(){ return H * 0.46; }
+
+  function computeCamTarget(){
+    const topIdx = blocks.length - 1;
+    const t = desiredScreenTop() - naturalTop(topIdx);
+    return Math.max(0, t);
+  }
+
+  function init(){
+    const baseW = Math.round(W * BASE_W_FRAC);
+    const baseX = Math.round((W - baseW) / 2);
+    blocks = [{ x: baseX, w: baseW, hue: BASE_HUE }];
+    falling = [];
+    floaters = [];
+    score = 0; combo = 0;
+    state = "play";
+    flash = 0;
+    cam = 0; camTarget = computeCamTarget();
+    cam = camTarget;
+    overEl.classList.remove("show");
+    spawnMoving();
+    updateScores();
+  }
+
+  function spawnMoving(){
+    const top = blocks[blocks.length - 1];
+    const speed = Math.min(MAX_SPEED, BASE_SPEED + score * SPEED_STEP);
+    // start on the side that gives the most travel room; alternate-ish
+    const fromLeft = Math.random() < 0.5;
+    moving = {
+      w: top.w,
+      x: fromLeft ? MARGIN : (W - top.w - MARGIN),
+      dir: fromLeft ? 1 : -1,
+      speed,
+      hue: BASE_HUE + blocks.length * HUE_STEP
+    };
+  }
+
+  function updateScores(){
+    scoreEl.textContent = score;
+    bestEl.textContent = best;
+  }
+
+  // --- the drop: slice against the block below --------------------------
+  function drop(){
+    if(state !== "play" || !moving) return;
+    const top = blocks[blocks.length - 1];
+    const delta = moving.x - top.x;          // + => moving is to the right
+    const overlap = top.w - Math.abs(delta); // overlapping width
+
+    if(overlap <= 0){
+      // total miss -> the whole moving block tumbles, game over
+      addFalling(moving.x, naturalTop(blocks.length) + cam, moving.w, moving.hue, delta >= 0 ? 1 : -1);
+      moving = null;
+      gameOver();
+      return;
+    }
+
+    const perfect = Math.abs(delta) <= PERFECT;
+    let newX, newW;
+
+    if(perfect){
+      // snap & regrow (capped at the base block width)
+      const cap = blocks[0].w;
+      newW = Math.min(cap, top.w + REGROW);
+      newX = top.x - Math.round((newW - top.w) / 2);
+      // keep on-screen
+      newX = Math.max(MARGIN, Math.min(newX, W - newW - MARGIN));
+      combo += 1;
+      flash = 1;
+      addFloater(top.x + top.w / 2, naturalTop(blocks.length) + cam, combo);
+    } else {
+      combo = 0;
+      // overlap region
+      const left  = Math.max(moving.x, top.x);
+      const right = Math.min(moving.x + moving.w, top.x + top.w);
+      newX = left;
+      newW = right - left;
+      // the overhang slice falls away
+      if(delta > 0){
+        addFalling(right, naturalTop(blocks.length) + cam, (moving.x + moving.w) - right, moving.hue, 1);
+      } else {
+        addFalling(moving.x, naturalTop(blocks.length) + cam, left - moving.x, moving.hue, -1);
+      }
+    }
+
+    blocks.push({ x: newX, w: newW, hue: moving.hue });
+
+    // score: +1 per floor, perfects add an escalating combo bonus
+    score += 1 + (perfect ? combo : 0);
+    if(score > best){ best = score; localStorage.setItem(BEST_KEY, String(best)); }
+    updateScores();
+
+    camTarget = computeCamTarget();
+    spawnMoving();
+  }
+
+  function addFalling(x, screenY, w, hue, dir){
+    if(w <= 0) return;
+    falling.push({
+      x, y: screenY, w, h: BLOCK_H,
+      vx: dir * (60 + Math.random()*50),
+      vy: -40 - Math.random()*40,
+      vr: dir * (2 + Math.random()*2),
+      rot: 0, hue, a: 1
+    });
+  }
+
+  function addFloater(x, y, combo){
+    floaters.push({ x, y, a: 1, t: 0, combo });
+  }
+
+  function gameOver(){
+    state = "over";
+    overMsgEl.innerHTML = `<b>${score}</b> 층`;
+    overSubEl.textContent = score >= best && score > 0 ? "🏆 신기록!" : `best ${best}`;
+    overEl.classList.add("show");
+  }
+
+  // --- render -----------------------------------------------------------
+  function blockFill(y, hue){
+    const g = ctx.createLinearGradient(0, y, 0, y + BLOCK_H);
+    g.addColorStop(0, `hsl(${hue},78%,64%)`);
+    g.addColorStop(1, `hsl(${hue},72%,48%)`);
+    return g;
+  }
+
+  function roundRect(x, y, w, h, r){
+    if(w <= 0 || h <= 0) return;
+    r = Math.max(0, Math.min(r, w/2, h/2));
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y, x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r);
+    ctx.arcTo(x, y, x+w, y, r);
+    ctx.closePath();
+  }
+
+  function drawBlock(x, screenY, w, hue){
+    if(screenY > H + BLOCK_H || screenY < -BLOCK_H*2) return; // cull
+    ctx.fillStyle = blockFill(screenY, hue);
+    roundRect(x, screenY, w, BLOCK_H, 5);
+    ctx.fill();
+    // top highlight strip
+    if(w > 8){
+      ctx.fillStyle = `hsla(${hue},90%,82%,0.55)`;
+      roundRect(x + 2, screenY + 2, w - 4, 3, 1.5);
+      ctx.fill();
+    }
+  }
+
+  function frame(ts){
+    const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0;
+    last = ts;
+
+    // smooth camera
+    cam += (camTarget - cam) * Math.min(1, dt * 8);
+    if(flash > 0) flash = Math.max(0, flash - dt * 2.4);
+
+    // update moving block
+    if(state === "play" && moving){
+      moving.x += moving.dir * moving.speed * dt;
+      const lo = MARGIN, hi = W - moving.w - MARGIN;
+      if(moving.x <= lo){ moving.x = lo; moving.dir = 1; }
+      else if(moving.x >= hi){ moving.x = hi; moving.dir = -1; }
+    }
+
+    // update falling slices
+    for(const f of falling){
+      f.vy += 900 * dt;       // gravity
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      f.rot += f.vr * dt;
+      f.a -= dt * 0.55;
+    }
+    falling = falling.filter(f => f.a > 0 && f.y < H + 200);
+
+    // update floaters
+    for(const fl of floaters){ fl.t += dt; fl.y -= 26 * dt; fl.a = Math.max(0, 1 - fl.t / 0.9); }
+    floaters = floaters.filter(fl => fl.a > 0);
+
+    // ---- draw ----
+    ctx.clearRect(0, 0, W, H);
+
+    // placed tower
+    for(let i = 0; i < blocks.length; i++){
+      const b = blocks[i];
+      drawBlock(b.x, naturalTop(i) + cam, b.w, b.hue);
+    }
+
+    // falling slices
+    for(const f of falling){
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, f.a);
+      ctx.translate(f.x + f.w/2, f.y + f.h/2);
+      ctx.rotate(f.rot);
+      ctx.fillStyle = `hsl(${f.hue},72%,54%)`;
+      roundRect(-f.w/2, -f.h/2, f.w, f.h, 5);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // moving block
+    if(state === "play" && moving){
+      drawBlock(moving.x, naturalTop(blocks.length) + cam, moving.w, moving.hue);
+      // guide line down to the block below for readability
+    }
+
+    // perfect floaters
+    for(const fl of floaters){
+      ctx.save();
+      ctx.globalAlpha = fl.a;
+      ctx.fillStyle = "#fff3df";
+      ctx.font = "800 18px 'Apple SD Gothic Neo',ui-rounded,sans-serif";
+      ctx.textAlign = "center";
+      const label = fl.combo > 1 ? `perfect! ×${fl.combo}` : "perfect!";
+      ctx.fillText(label, fl.x, fl.y);
+      ctx.restore();
+    }
+
+    // perfect flash overlay
+    if(flash > 0){
+      ctx.fillStyle = `rgba(255,210,140,${flash * 0.28})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  // --- input ------------------------------------------------------------
+  function onTap(e){
+    if(e) e.preventDefault();
+    if(state === "over") return;   // restart via button only
+    drop();
+  }
+  wrap.addEventListener("pointerdown", onTap);
+  window.addEventListener("keydown", e=>{
+    if(e.code === "Space" || e.key === " "){
+      e.preventDefault();
+      if(state === "over") init(); else drop();
+    }
+  });
+  document.getElementById("overRestart").addEventListener("click", e=>{
+    e.stopPropagation();
+    init();
+  });
+
+  window.addEventListener("resize", ()=>{ resize(); if(blocks) recenterBase(); });
+
+  // when the viewport changes size, keep the base centered & clamp moving
+  function recenterBase(){
+    const baseW = Math.round(W * BASE_W_FRAC);
+    // only adjust base if we haven't started stacking much (keeps layout sane)
+    if(blocks.length === 1){
+      blocks[0].w = baseW;
+      blocks[0].x = Math.round((W - baseW) / 2);
+      if(moving){ moving.w = baseW; }
+    }
+    camTarget = computeCamTarget();
+  }
+
+  resize();
+  init();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

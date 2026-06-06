@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>지뢰찾기 · funlab</title>
+<style>
+  :root{
+    --bg:#14110d;--panel:#1d1812;--line:#3a3024;--cream:#f6ead8;--ink:#e7dcc8;
+    --muted:#a9977e;--amber:#ffb154;--green:#9fd49a;--red:#ff6b5e;--gold:#ffd479;
+    /* harmonized warm per-number palette */
+    --n1:#8fb6ff;--n2:#9fd49a;--n3:#ff8d7a;--n4:#c79bff;
+    --n5:#ffb154;--n6:#5fd3c7;--n7:#f0e2c4;--n8:#9a8a72
+  }
+  *{margin:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;line-height:1.5;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    min-height:100%;-webkit-tap-highlight-color:transparent;overflow-x:hidden
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:20}
+  .back:hover{color:var(--ink)}
+  .wrap{max-width:480px;margin:0 auto;padding:54px 16px 50px;display:flex;flex-direction:column;gap:16px}
+  .head{text-align:center}
+  h1{font-size:27px;font-weight:800;background:linear-gradient(#fff3df,#ffcf8a);
+     -webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);font-size:12.5px;margin-top:4px}
+
+  /* header bar: mines · restart · timer */
+  .hud{display:flex;align-items:center;justify-content:space-between;gap:12px;
+       background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px 16px}
+  .counter{display:flex;align-items:center;gap:7px;font-variant-numeric:tabular-nums;
+           font-weight:800;font-size:22px;min-width:78px}
+  .counter .ic{font-size:18px}
+  #mineCount{color:var(--amber);justify-content:flex-start}
+  #timer{color:var(--gold);justify-content:flex-end}
+  .restart{width:54px;height:54px;border-radius:16px;border:1px solid var(--line);
+           background:linear-gradient(160deg,#2a2114,#1a140d);font-size:28px;line-height:1;
+           cursor:pointer;display:flex;align-items:center;justify-content:center;
+           box-shadow:0 4px 12px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.05);
+           transition:transform .08s,filter .15s;user-select:none}
+  .restart:hover{filter:brightness(1.15)}
+  .restart:active{transform:scale(.93)}
+
+  /* board */
+  .boardwrap{display:flex;justify-content:center}
+  .board{
+    display:grid;grid-template-columns:repeat(9,1fr);gap:5px;
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:10px;width:100%;max-width:432px;touch-action:manipulation;user-select:none
+  }
+  .cell{
+    aspect-ratio:1/1;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:clamp(15px,5vw,21px);cursor:pointer;position:relative;
+    font-variant-numeric:tabular-nums;transition:transform .05s,background .1s;
+    background:linear-gradient(160deg,#352a1b,#241c12);
+    border:1px solid #46371f;
+    box-shadow:0 2px 4px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.06);
+    color:var(--ink)
+  }
+  .cell:hover:not(.open):not(.flag){filter:brightness(1.12)}
+  .cell:active:not(.open){transform:scale(.94)}
+  .cell.open{
+    background:#15110b;border:1px solid #2a2014;cursor:default;
+    box-shadow:inset 0 2px 5px rgba(0,0,0,.55)
+  }
+  .cell.flag{cursor:pointer}
+  .cell.n1{color:var(--n1)} .cell.n2{color:var(--n2)} .cell.n3{color:var(--n3)}
+  .cell.n4{color:var(--n4)} .cell.n5{color:var(--n5)} .cell.n6{color:var(--n6)}
+  .cell.n7{color:var(--n7)} .cell.n8{color:var(--n8)}
+  .cell.mine{background:linear-gradient(160deg,#4a1812,#2a0f0b);border-color:var(--red)}
+  .cell.boom{background:linear-gradient(160deg,#6a1c12,#3a0f0a);border-color:var(--red);
+             box-shadow:0 0 18px rgba(255,107,94,.55),inset 0 1px 0 rgba(255,255,255,.06)}
+  .cell.wrong{background:linear-gradient(160deg,#2a2014,#1a140d)}
+  .cell.wrong::after{content:"✖";color:var(--red);position:absolute;font-size:.85em}
+  .cell.pop{animation:pop .18s ease}
+  @keyframes pop{0%{transform:scale(.7)}100%{transform:scale(1)}}
+
+  .msg{text-align:center;min-height:22px;font-size:14.5px;font-weight:700;color:var(--amber)}
+  .msg.win{color:var(--green)} .msg.lose{color:var(--red)}
+
+  .footer{display:flex;align-items:center;justify-content:space-between;gap:10px;
+          color:#7c6d58;font-size:11.5px}
+  .footer .best b{color:var(--gold)}
+  .reset{background:none;border:none;color:#7c6d58;font-size:11.5px;cursor:pointer;
+         text-decoration:underline;font-family:inherit}
+  .reset:hover{color:var(--muted)}
+  .hint{text-align:center;color:#7c6d58;font-size:11px;margin-top:-6px}
+</style>
+</head>
+<body>
+<a class="back" href="../index.html">← funlab</a>
+
+<div class="wrap">
+  <div class="head">
+    <h1>지뢰찾기</h1>
+    <div class="sub">숫자로 지뢰를 추리해 안전지대를 연다</div>
+  </div>
+
+  <div class="hud">
+    <div class="counter" id="mineCount"><span class="ic">💣</span><span id="mineNum">10</span></div>
+    <button class="restart" id="restart" aria-label="다시 시작">🙂</button>
+    <div class="counter" id="timer"><span id="timeNum">0</span><span class="ic">⏱</span></div>
+  </div>
+
+  <div class="boardwrap">
+    <div class="board" id="board"></div>
+  </div>
+
+  <div class="msg" id="msg">아무 칸이나 눌러 시작 — 첫 칸은 항상 안전해.</div>
+  <div class="hint">왼쪽클릭/탭 = 열기 · 오른쪽클릭(모바일: 길게 눌러) = 🚩 깃발</div>
+
+  <div class="footer">
+    <div class="best" id="bestBox">베스트: <b id="bestVal">—</b></div>
+    <button class="reset" id="resetBest">기록 초기화</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const $=id=>document.getElementById(id);
+  const ROWS=9, COLS=9, MINES=10;
+  const KEY_BEST='funlab:mines:best';
+
+  // ---- state ----
+  let grid=[];          // each: {mine,adj,open,flag,el}
+  let started=false;    // first click placed mines?
+  let over=false;
+  let flags=0;
+  let openedCount=0;
+  let timer=0, timerId=null;
+
+  // ---- best time ----
+  let best = +(localStorage.getItem(KEY_BEST)||0) || 0;
+  function renderBest(){ $('bestVal').textContent = best>0 ? best+'초' : '—'; }
+
+  // ---- board build ----
+  function buildBoard(){
+    const board=$('board');
+    board.innerHTML='';
+    grid=[];
+    for(let r=0;r<ROWS;r++){
+      const row=[];
+      for(let c=0;c<COLS;c++){
+        const el=document.createElement('div');
+        el.className='cell';
+        el.dataset.r=r; el.dataset.c=c;
+        board.appendChild(el);
+        row.push({mine:false,adj:0,open:false,flag:false,el:el});
+      }
+      grid.push(row);
+    }
+  }
+
+  function neighbors(r,c){
+    const out=[];
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+      if(!dr&&!dc) continue;
+      const nr=r+dr, nc=c+dc;
+      if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS) out.push(grid[nr][nc]);
+    }
+    return out;
+  }
+
+  // place mines AFTER first click — keep the clicked cell AND its neighbors mine-free
+  // so the first click always opens an area (a 0-cell flood-fill when possible).
+  function placeMines(safeR,safeC){
+    const banned=new Set();
+    banned.add(safeR+','+safeC);
+    neighbors(safeR,safeC).forEach(n=>{
+      banned.add(+n.el.dataset.r+','+ +n.el.dataset.c);
+    });
+    // if banning the 3x3 leaves too few cells (not possible at 9x9/10), it still works
+    const cells=[];
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+      if(!banned.has(r+','+c)) cells.push([r,c]);
+    }
+    // Fisher-Yates partial shuffle
+    for(let i=0;i<MINES;i++){
+      const j=i+Math.floor(Math.random()*(cells.length-i));
+      const t=cells[i]; cells[i]=cells[j]; cells[j]=t;
+      const [r,c]=cells[i];
+      grid[r][c].mine=true;
+    }
+    // compute adjacency
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+      if(grid[r][c].mine) continue;
+      grid[r][c].adj = neighbors(r,c).filter(n=>n.mine).length;
+    }
+  }
+
+  // ---- timer ----
+  function startTimer(){
+    if(timerId) return;
+    timerId=setInterval(()=>{
+      timer++;
+      if(timer>999) timer=999;
+      $('timeNum').textContent=timer;
+    },1000);
+  }
+  function stopTimer(){ if(timerId){ clearInterval(timerId); timerId=null; } }
+
+  function updateMineCount(){ $('mineNum').textContent = MINES - flags; }
+  function setMsg(t,cls){ const m=$('msg'); m.textContent=t; m.className='msg '+(cls||''); }
+  function setFace(f){ $('restart').textContent=f; }
+
+  // ---- reveal / flood-fill ----
+  function reveal(r,c){
+    const cell=grid[r][c];
+    if(cell.open||cell.flag) return;
+    // iterative flood fill (stack) to avoid deep recursion
+    const stack=[[r,c]];
+    while(stack.length){
+      const [cr,cc]=stack.pop();
+      const cur=grid[cr][cc];
+      if(cur.open||cur.flag) continue;
+      cur.open=true; openedCount++;
+      paintOpen(cur,cr,cc);
+      if(cur.adj===0 && !cur.mine){
+        neighbors(cr,cc).forEach(n=>{
+          if(!n.open&&!n.flag&&!n.mine){
+            stack.push([+n.el.dataset.r, +n.el.dataset.c]);
+          }
+        });
+      }
+    }
+  }
+
+  function paintOpen(cell,r,c){
+    const el=cell.el;
+    el.classList.add('open','pop');
+    el.classList.remove('flag');
+    el.textContent='';
+    if(cell.adj>0){
+      el.textContent=cell.adj;
+      el.classList.add('n'+cell.adj);
+    }
+    setTimeout(()=>el.classList.remove('pop'),180);
+  }
+
+  // ---- click handlers ----
+  function leftClick(r,c){
+    if(over) return;
+    const cell=grid[r][c];
+    if(cell.flag) return;
+    if(!started){
+      placeMines(r,c);
+      started=true;
+      startTimer();
+    }
+    if(cell.open){ return; }
+    if(cell.mine){
+      lose(r,c);
+      return;
+    }
+    reveal(r,c);
+    checkWin();
+  }
+
+  function rightClick(r,c){
+    if(over||!started) {
+      // allow flagging before first reveal too? require started for sensible counts.
+      if(over) return;
+    }
+    const cell=grid[r][c];
+    if(cell.open) return;
+    cell.flag=!cell.flag;
+    if(cell.flag){
+      cell.el.classList.add('flag');
+      cell.el.textContent='🚩';
+      flags++;
+    }else{
+      cell.el.classList.remove('flag');
+      cell.el.textContent='';
+      flags--;
+    }
+    updateMineCount();
+  }
+
+  // ---- win / lose ----
+  function checkWin(){
+    if(openedCount === ROWS*COLS - MINES){
+      over=true; stopTimer();
+      // flag all remaining mines for satisfaction
+      for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+        const cell=grid[r][c];
+        if(cell.mine&&!cell.flag){
+          cell.flag=true; cell.el.classList.add('flag'); cell.el.textContent='🚩';
+        }
+      }
+      flags=MINES; updateMineCount();
+      setFace('😎');
+      let extra='';
+      if(best===0||timer<best){
+        best=timer; localStorage.setItem(KEY_BEST,best); renderBest();
+        extra=' 🏆 신기록!';
+      }
+      setMsg('클리어! '+timer+'초'+extra,'win');
+    }
+  }
+
+  function lose(br,bc){
+    over=true; stopTimer();
+    grid[br][bc].mine=true;
+    for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+      const cell=grid[r][c];
+      if(cell.mine){
+        if(!cell.flag){
+          cell.el.classList.add('open','mine');
+          cell.el.textContent='💣';
+        }
+      } else if(cell.flag){
+        // wrongly flagged
+        cell.el.classList.add('open','wrong');
+        cell.el.textContent='';
+      }
+    }
+    const boom=grid[br][bc].el;
+    boom.classList.add('boom'); boom.textContent='💥';
+    setFace('😵');
+    setMsg('펑! 지뢰를 밟았다 — 🙂 눌러 다시.','lose');
+  }
+
+  // ---- events (with long-press flag for mobile) ----
+  const board=$('board');
+  let lpTimer=null, lpFired=false, lpCell=null;
+
+  function cellFrom(target){
+    const el=target.closest('.cell');
+    if(!el) return null;
+    return [+el.dataset.r, +el.dataset.c];
+  }
+
+  board.addEventListener('click',e=>{
+    if(lpFired){ lpFired=false; return; }   // suppress click after long-press
+    const rc=cellFrom(e.target); if(!rc) return;
+    leftClick(rc[0],rc[1]);
+  });
+
+  board.addEventListener('contextmenu',e=>{
+    e.preventDefault();
+    const rc=cellFrom(e.target); if(!rc) return;
+    rightClick(rc[0],rc[1]);
+  });
+
+  // touch long-press → flag
+  board.addEventListener('touchstart',e=>{
+    const rc=cellFrom(e.target); if(!rc) return;
+    lpFired=false; lpCell=rc;
+    lpTimer=setTimeout(()=>{
+      lpFired=true;
+      rightClick(rc[0],rc[1]);
+      if(navigator.vibrate) navigator.vibrate(15);
+    },420);
+  },{passive:true});
+  function cancelLP(){ if(lpTimer){ clearTimeout(lpTimer); lpTimer=null; } }
+  board.addEventListener('touchend',e=>{
+    cancelLP();
+    if(lpFired){ e.preventDefault(); }  // block the synthetic click
+  });
+  board.addEventListener('touchmove',cancelLP,{passive:true});
+  board.addEventListener('touchcancel',cancelLP);
+
+  // ---- new game ----
+  function newGame(){
+    stopTimer();
+    started=false; over=false; flags=0; openedCount=0; timer=0;
+    $('timeNum').textContent='0';
+    buildBoard();
+    updateMineCount();
+    setFace('🙂');
+    setMsg('아무 칸이나 눌러 시작 — 첫 칸은 항상 안전해.','');
+  }
+
+  $('restart').addEventListener('click',newGame);
+  $('resetBest').addEventListener('click',()=>{
+    if(!confirm('베스트 기록을 지울까?')) return;
+    best=0; localStorage.removeItem(KEY_BEST); renderBest();
+  });
+
+  // prevent page context menu glitch on the restart/buttons
+  renderBest();
+  updateMineCount();
+  newGame();
+})();
+</script>
+</body>
+</html>
