@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>한 번 더? · funlab</title>
+<style>
+  :root{
+    --bg:#14110d;--panel:#1d1812;--line:#3a3024;--cream:#f6ead8;--ink:#e7dcc8;
+    --muted:#a9977e;--amber:#ffb154;--green:#9fd49a;--red:#ff6b5e;--gold:#ffd479
+  }
+  *{margin:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;line-height:1.5;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    min-height:100%;-webkit-tap-highlight-color:transparent;overflow-x:hidden
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:20}
+  .back:hover{color:var(--ink)}
+  .wrap{max-width:520px;margin:0 auto;padding:54px 18px 60px;display:flex;flex-direction:column;gap:16px}
+  .head{text-align:center}
+  h1{font-size:27px;font-weight:800;background:linear-gradient(#fff3df,#ffcf8a);
+     -webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);font-size:12.5px;margin-top:4px}
+
+  /* top stat bar: total + best */
+  .totals{display:flex;gap:12px}
+  .totbox{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:11px 14px;text-align:center}
+  .totbox .lbl{font-size:11px;color:var(--muted);letter-spacing:.5px}
+  .totbox .val{font-size:26px;font-weight:800;margin-top:2px;font-variant-numeric:tabular-nums}
+  #total .val{color:var(--cream)}
+  #best .val{color:var(--gold)}
+
+  /* round panel */
+  .round{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;position:relative;overflow:hidden}
+  .round.flash-bust{animation:bustflash .5s ease}
+  .round.flash-bank{animation:bankflash .6s ease}
+  @keyframes bustflash{0%{background:#4a1410;border-color:var(--red)}100%{background:var(--panel);border-color:var(--line)}}
+  @keyframes bankflash{0%{background:#3a2c10;border-color:var(--gold)}100%{background:var(--panel);border-color:var(--line)}}
+
+  .roundtop{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .pot{text-align:left}
+  .pot .lbl{font-size:11px;color:var(--muted);letter-spacing:.5px}
+  .pot .val{font-size:40px;font-weight:800;color:var(--amber);line-height:1.05;font-variant-numeric:tabular-nums}
+  .mult{text-align:right}
+  .mult .lbl{font-size:11px;color:var(--muted);letter-spacing:.5px}
+  .mult .val{font-size:30px;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums;transition:transform .15s}
+  .mult .val.pop{transform:scale(1.35)}
+  .cashline{margin-top:6px;text-align:center;font-size:12.5px;color:var(--muted)}
+  .cashline b{color:var(--cream)}
+  .streak{margin-top:2px;text-align:center;font-size:11.5px;color:var(--muted);min-height:16px}
+  .streak b{color:var(--amber)}
+
+  /* card stage */
+  .stage{margin:14px 0 4px;display:flex;justify-content:center;align-items:center;min-height:158px}
+  .card{
+    width:118px;height:158px;border-radius:16px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:6px;position:relative;
+    border:1px solid var(--line);background:linear-gradient(160deg,#2a2114,#1a140d);
+    box-shadow:0 10px 24px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.04);
+    user-select:none
+  }
+  .card .ctype{font-size:11px;letter-spacing:1px;color:var(--muted);text-transform:uppercase}
+  .card .cmain{font-size:40px;line-height:1}
+  .card .cval{font-size:22px;font-weight:800}
+  .card.point{border-color:#5a7a4a}
+  .card.point .cval{color:var(--green)}
+  .card.point.big{border-color:var(--green);box-shadow:0 0 22px rgba(159,212,154,.4),0 10px 24px rgba(0,0,0,.45)}
+  .card.mult{border-color:#7a6a30}
+  .card.mult .cval{color:var(--gold)}
+  .card.mult.big{box-shadow:0 0 24px rgba(255,212,121,.45),0 10px 24px rgba(0,0,0,.45)}
+  .card.bust{border-color:var(--red);background:linear-gradient(160deg,#3a1410,#1a0c0a)}
+  .card.bust .cval{color:var(--red)}
+  .card.placeholder{background:linear-gradient(160deg,#211a11,#181109);border-style:dashed;opacity:.6}
+  .card.placeholder .cmain{font-size:30px;opacity:.5}
+  .card.deal{animation:deal .26s cubic-bezier(.2,.9,.3,1.2)}
+  @keyframes deal{0%{transform:translateY(-26px) rotate(-7deg) scale(.8);opacity:0}100%{transform:none;opacity:1}}
+  .card.shake{animation:shake .4s}
+  @keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-7px)}40%,60%{transform:translateX(7px)}}
+
+  /* buttons */
+  .actions{display:flex;gap:12px;margin-top:6px}
+  button.act{flex:1;border:none;border-radius:26px;padding:15px 10px;font-family:inherit;font-size:16px;font-weight:800;cursor:pointer;transition:transform .08s,filter .15s}
+  button.act:active{transform:scale(.96)}
+  button.act:disabled{opacity:.4;cursor:not-allowed}
+  .flip{background:linear-gradient(#3a2c18,#2a2013);color:var(--amber);border:1px solid #6a4d22}
+  .flip:not(:disabled):hover{filter:brightness(1.18)}
+  .bank{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a}
+  .bank:not(:disabled):hover{filter:brightness(1.06)}
+  .bank:disabled{background:#2a2114;color:var(--muted);border:1px solid var(--line)}
+
+  .msg{text-align:center;min-height:22px;font-size:14px;font-weight:700}
+  .msg.bust{color:var(--red)}
+  .msg.bank{color:var(--gold)}
+  .msg.go{color:var(--amber)}
+
+  /* floating gain popup */
+  .float{position:absolute;left:50%;top:42%;transform:translateX(-50%);font-size:30px;font-weight:800;pointer-events:none;z-index:5}
+  .float.up{animation:floatup 1s ease forwards}
+  @keyframes floatup{0%{opacity:0;transform:translate(-50%,6px) scale(.7)}20%{opacity:1}100%{opacity:0;transform:translate(-50%,-46px) scale(1.1)}}
+
+  .odds{text-align:center;color:#7c6d58;font-size:11px;margin-top:2px}
+  .reset{display:block;margin:0 auto;background:none;border:none;color:#7c6d58;font-size:11.5px;cursor:pointer;text-decoration:underline;font-family:inherit}
+  .reset:hover{color:var(--muted)}
+</style>
+</head>
+<body>
+<a class="back" href="../index.html">← funlab</a>
+
+<div class="wrap">
+  <div class="head">
+    <h1>한 번 더?</h1>
+    <div class="sub">뒤집을수록 배수가 쌓인다 — 챙길까, 한 번 더 갈까</div>
+  </div>
+
+  <div class="totals">
+    <div class="totbox" id="total"><div class="lbl">내 점수</div><div class="val" id="totalVal">0</div></div>
+    <div class="totbox" id="best"><div class="lbl">베스트 ★</div><div class="val" id="bestVal">0</div></div>
+  </div>
+
+  <div class="round" id="round">
+    <div class="roundtop">
+      <div class="pot"><div class="lbl">이번 판 POT</div><div class="val" id="potVal">0</div></div>
+      <div class="mult"><div class="lbl">배수</div><div class="val" id="multVal">×1</div></div>
+    </div>
+    <div class="cashline">챙기면 → <b id="cashVal">0</b> 점</div>
+    <div class="streak" id="streak"></div>
+
+    <div class="stage" id="stage">
+      <div class="card placeholder"><div class="cmain">🂠</div><div class="ctype">flip</div></div>
+    </div>
+
+    <div class="msg go" id="msg">한 장 뒤집어 시작!</div>
+  </div>
+
+  <div class="actions">
+    <button class="act flip" id="flipBtn">🃏 한 장 더</button>
+    <button class="act bank" id="bankBtn" disabled>💰 챙기기</button>
+  </div>
+  <div class="odds">💣 폭탄 약 5장에 1장 · 챙기면 안전</div>
+  <button class="reset" id="resetBtn">기록 초기화</button>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const $=id=>document.getElementById(id);
+  const KEY_TOTAL='funlab:luck:total', KEY_BEST='funlab:luck:best';
+
+  // ---- persistent state ----
+  let total = +(localStorage.getItem(KEY_TOTAL)||0) || 0;
+  let best  = +(localStorage.getItem(KEY_BEST)||0)  || 0;
+
+  // ---- round state ----
+  let pot=0, mult=1, streak=0, roundOver=false, busy=false;
+
+  // ---- card deck (weighted) ----
+  // weights tuned for ~20% bust, frequent points, occasional multipliers, rare big hits.
+  const DECK=[
+    // BUST ~20%
+    {w:20, kind:'bust'},
+    // POINTS ~58%
+    {w:14, kind:'point', val:3},
+    {w:14, kind:'point', val:5},
+    {w:12, kind:'point', val:8},
+    {w:9,  kind:'point', val:12},
+    {w:3,  kind:'point', val:25, big:true},   // rare jackpot card
+    // MULTIPLIERS ~22%
+    {w:11, kind:'mult', val:1.5},
+    {w:8,  kind:'mult', val:2},
+    {w:3,  kind:'mult', val:3, big:true},     // rare big multiplier
+  ];
+  const TOTW=DECK.reduce((a,c)=>a+c.w,0);
+  function draw(){
+    let r=Math.random()*TOTW;
+    for(const c of DECK){ if((r-=c.w)<0) return c; }
+    return DECK[DECK.length-1];
+  }
+
+  // ---- rendering ----
+  function cashNow(){ return Math.round(pot*mult); }
+  function fmtMult(m){ return '×'+parseFloat(m.toFixed(2)); }
+
+  function render(){
+    $('totalVal').textContent=total;
+    $('bestVal').textContent=best;
+    $('potVal').textContent=pot;
+    $('multVal').textContent=fmtMult(mult);
+    $('cashVal').textContent=cashNow();
+    $('streak').innerHTML = streak>0 ? ('이번 판 <b>'+streak+'연속</b> 뒤집음') : '';
+    $('bankBtn').disabled = busy || pot<=0;
+    $('flipBtn').disabled = busy;
+  }
+
+  function setMsg(t,cls){ const m=$('msg'); m.textContent=t; m.className='msg '+(cls||''); }
+
+  function showCard(html,cls,deal){
+    const stage=$('stage');
+    stage.innerHTML='<div class="card '+cls+(deal?' deal':'')+'">'+html+'</div>';
+  }
+
+  function popMult(){
+    const v=$('multVal'); v.classList.add('pop');
+    setTimeout(()=>v.classList.remove('pop'),160);
+  }
+
+  function floatGain(txt,color){
+    const r=$('round');
+    const f=document.createElement('div');
+    f.className='float up'; f.style.color=color; f.textContent=txt;
+    r.appendChild(f);
+    setTimeout(()=>f.remove(),1000);
+  }
+
+  // ---- actions ----
+  function flip(){
+    if(busy) return;
+    busy=true; render();
+    const c=draw();
+
+    if(c.kind==='bust'){
+      showCard('<div class="ctype">BOMB</div><div class="cmain">💣</div><div class="cval">터졌다</div>','bust shake',true);
+      const r=$('round');
+      r.classList.remove('flash-bust'); void r.offsetWidth; r.classList.add('flash-bust');
+      const lost=cashNow();
+      pot=0; mult=1; streak=0; roundOver=true;
+      setMsg(lost>0? ('💥 터졌다! '+lost+'점 날림') : '💥 터졌다!','bust');
+      render();
+      setTimeout(()=>{ busy=false; render(); },420);
+      return;
+    }
+
+    streak++;
+    if(c.kind==='point'){
+      pot+=c.val;
+      const big=c.big?' big':'';
+      showCard('<div class="ctype">POINT</div><div class="cmain">'+(c.big?'💎':'🪙')+'</div><div class="cval">+'+c.val+'</div>','point'+big,true);
+      floatGain('+'+c.val, c.big?'var(--green)':'#bfe0b8');
+      setMsg(c.big? '💎 잭팟 카드! +'+c.val : '좋아, +'+c.val,'go');
+    } else { // mult
+      mult=Math.round(mult*c.val*100)/100;
+      const big=c.big?' big':'';
+      showCard('<div class="ctype">MULTIPLIER</div><div class="cmain">'+(c.big?'🔥':'✖️')+'</div><div class="cval">'+fmtMult(c.val)+'</div>','mult'+big,true);
+      popMult();
+      floatGain(fmtMult(c.val), 'var(--gold)');
+      setMsg(c.big? '🔥 배수 폭발! '+fmtMult(c.val) : '배수 상승! '+fmtMult(c.val),'go');
+    }
+    render();
+    setTimeout(()=>{ busy=false; render(); },260);
+  }
+
+  function bank(){
+    if(busy || pot<=0) return;
+    busy=true;
+    const gain=cashNow();
+    total+=gain;
+    localStorage.setItem(KEY_TOTAL,total);
+    let newBest=false;
+    if(total>best){ best=total; localStorage.setItem(KEY_BEST,best); newBest=true; }
+
+    const r=$('round');
+    r.classList.remove('flash-bank'); void r.offsetWidth; r.classList.add('flash-bank');
+    showCard('<div class="ctype">BANKED</div><div class="cmain">💰</div><div class="cval">+'+gain+'</div>','mult big',true);
+    floatGain('+'+gain,'var(--gold)');
+    setMsg(newBest? ('🏆 신기록! +'+gain+'점 챙김') : ('💰 '+gain+'점 챙김!'),'bank');
+
+    pot=0; mult=1; streak=0; roundOver=false;
+    render();
+    setTimeout(()=>{ busy=false; render(); },360);
+  }
+
+  $('flipBtn').onclick=flip;
+  $('bankBtn').onclick=bank;
+  $('resetBtn').onclick=function(){
+    if(!confirm('내 점수와 베스트 기록을 모두 지울까?')) return;
+    total=0; best=0; pot=0; mult=1; streak=0; roundOver=false; busy=false;
+    localStorage.removeItem(KEY_TOTAL); localStorage.removeItem(KEY_BEST);
+    $('stage').innerHTML='<div class="card placeholder"><div class="cmain">🂠</div><div class="ctype">flip</div></div>';
+    setMsg('기록 초기화 완료. 다시 시작!','go');
+    render();
+  };
+
+  // keyboard: space/F = flip, B/Enter = bank
+  document.addEventListener('keydown',function(e){
+    if(e.repeat) return;
+    const k=e.key.toLowerCase();
+    if(k===' '||k==='f'){ e.preventDefault(); flip(); }
+    else if(k==='b'||k==='enter'){ e.preventDefault(); if(!$('bankBtn').disabled) bank(); }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

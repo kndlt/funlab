@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>점점 강해짐 · funlab</title>
+<style>
+  :root{
+    --bg:#14110d;--panel:#1d1812;--panel2:#241c12;--line:#3a3024;
+    --cream:#f6ead8;--ink:#e7dcc8;--muted:#a9977e;--amber:#ffb154;
+    --amber-deep:#ff9e3d;--green:#9fd49a;
+  }
+  *{margin:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    line-height:1.5;overflow-x:hidden;
+    background-image:radial-gradient(75% 55% at 50% -8%,rgba(255,178,84,.10),transparent 62%);
+    -webkit-tap-highlight-color:transparent;user-select:none;
+  }
+  a.back{position:fixed;top:14px;left:16px;z-index:30;color:var(--muted);
+    text-decoration:none;font-size:13.5px;font-weight:600;opacity:.8}
+  a.back:hover{color:var(--amber);opacity:1}
+
+  .wrap{max-width:980px;margin:0 auto;padding:54px 18px 80px;
+    display:grid;grid-template-columns:1fr 360px;gap:26px;align-items:start}
+  @media(max-width:780px){.wrap{grid-template-columns:1fr;gap:18px;padding-top:46px}}
+
+  /* ---- left: orb + counters ---- */
+  .stage{display:flex;flex-direction:column;align-items:center;
+    text-align:center;padding-top:6px;position:sticky;top:18px}
+  @media(max-width:780px){.stage{position:static}}
+
+  .title{font-size:15px;color:var(--muted);font-weight:700;letter-spacing:.4px}
+  .mana{font-size:54px;font-weight:800;letter-spacing:-1px;line-height:1.05;margin-top:2px;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent;
+    font-variant-numeric:tabular-nums}
+  @media(max-width:780px){.mana{font-size:44px}}
+  .mana.bump{animation:bump .18s ease}
+  @keyframes bump{0%{transform:scale(1)}40%{transform:scale(1.08)}100%{transform:scale(1)}}
+  .unit{font-size:18px;color:var(--amber);font-weight:700;margin-left:4px;-webkit-text-fill-color:var(--amber)}
+  .rate{font-size:14.5px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+  .rate b{color:var(--green);font-weight:800}
+  .perclick{font-size:12.5px;color:#8a7a62;margin-top:1px;font-variant-numeric:tabular-nums}
+
+  .orbwrap{margin:26px 0 8px;position:relative;width:230px;height:230px;
+    display:flex;align-items:center;justify-content:center}
+  .orb{
+    width:178px;height:178px;border-radius:50%;cursor:pointer;position:relative;
+    background:
+      radial-gradient(38% 34% at 36% 30%,#fff7e8 0%,rgba(255,231,178,.65) 22%,transparent 55%),
+      radial-gradient(circle at 50% 52%,#ffcf8a 0%,#ff9e3d 42%,#c96a18 72%,#7a3c0c 100%);
+    box-shadow:
+      0 0 0 2px rgba(255,196,120,.35),
+      0 0 38px 6px rgba(255,158,61,.45),
+      0 0 90px 18px rgba(255,140,40,.28),
+      inset 0 -16px 34px rgba(120,52,8,.55),
+      inset 0 10px 26px rgba(255,247,224,.45);
+    transition:transform .08s ease, box-shadow .25s ease;
+    animation:breathe 3.4s ease-in-out infinite;
+  }
+  .orb::after{content:"";position:absolute;inset:-26px;border-radius:50%;
+    background:radial-gradient(circle,rgba(255,170,70,.22),transparent 68%);
+    pointer-events:none;animation:halo 3.4s ease-in-out infinite}
+  @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.035)}}
+  @keyframes halo{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:.9;transform:scale(1.08)}}
+  .orb:active{transform:scale(.93)}
+  .orb.flash{box-shadow:
+      0 0 0 3px rgba(255,224,160,.75),
+      0 0 60px 14px rgba(255,184,90,.75),
+      0 0 130px 30px rgba(255,150,50,.5),
+      inset 0 -16px 34px rgba(120,52,8,.55),
+      inset 0 10px 26px rgba(255,247,224,.6);}
+  .sigil{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:62px;color:rgba(255,248,232,.85);pointer-events:none;
+    text-shadow:0 0 18px rgba(255,170,70,.8);font-weight:800}
+  .hint{font-size:12.5px;color:#8a7a62;margin-top:4px}
+
+  /* floating +N */
+  .float{position:absolute;left:50%;top:42%;transform:translate(-50%,0);
+    font-weight:800;font-size:20px;color:#fff3df;pointer-events:none;
+    text-shadow:0 1px 8px rgba(255,150,50,.7);animation:floatUp .9s ease-out forwards}
+  @keyframes floatUp{0%{opacity:0;transform:translate(-50%,4px) scale(.8)}
+    18%{opacity:1}100%{opacity:0;transform:translate(-50%,-58px) scale(1.05)}}
+
+  /* ---- right: shop ---- */
+  .shop{display:flex;flex-direction:column;gap:10px}
+  .shhead{display:flex;justify-content:space-between;align-items:baseline}
+  .shead h2{font-size:18px;color:var(--cream);font-weight:800}
+  .shead .tag{font-size:11.5px;color:var(--muted)}
+
+  .item{background:var(--panel);border:1px solid var(--line);border-radius:13px;
+    padding:11px 13px;display:grid;grid-template-columns:42px 1fr auto;gap:11px;align-items:center;
+    cursor:pointer;transition:border-color .15s, background .15s, transform .06s, opacity .25s;}
+  .item:hover{border-color:#6a4d22}
+  .item:active{transform:translateY(1px)}
+  .item.locked{opacity:.55;cursor:default;filter:saturate(.5)}
+  .item.locked:hover{border-color:var(--line)}
+  .item.cant{cursor:not-allowed}
+  .item.cant .buy{color:#b06a4a}
+  .item.justbought{animation:flashItem .5s ease}
+  @keyframes flashItem{0%{background:#2e2615;border-color:var(--amber)}100%{background:var(--panel);border-color:var(--line)}}
+
+  .icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+    font-size:22px;background:var(--panel2);border:1px solid var(--line);position:relative}
+  .icon .glow{position:absolute;inset:0;border-radius:10px;box-shadow:inset 0 0 16px var(--c,rgba(255,170,70,.4))}
+  .meta{min-width:0}
+  .meta .nm{font-size:14.5px;color:var(--cream);font-weight:800;display:flex;align-items:center;gap:7px}
+  .owned{font-size:11px;color:#241400;background:var(--amber);border-radius:20px;
+    padding:1px 8px;font-weight:800;min-width:22px;text-align:center}
+  .owned.zero{background:var(--panel2);color:var(--muted);border:1px solid var(--line)}
+  .meta .desc{font-size:11.5px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+  .meta .out{color:var(--green)}
+  .meta .clickp{color:var(--amber)}
+  .buy{text-align:right;font-weight:800;font-size:13.5px;color:var(--amber);white-space:nowrap;
+    font-variant-numeric:tabular-nums}
+  .buy small{display:block;font-size:10px;color:var(--muted);font-weight:600}
+
+  .sectlabel{font-size:11.5px;color:var(--muted);font-weight:700;letter-spacing:.6px;
+    margin:8px 0 1px;text-transform:uppercase}
+  .nextlock{font-size:12px;color:#7c6d58;text-align:center;padding:8px;border:1px dashed var(--line);
+    border-radius:10px;font-variant-numeric:tabular-nums}
+
+  .footer{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;
+    margin-top:8px;color:#7c6d58;font-size:12px;border-top:1px solid var(--line);padding-top:14px;flex-wrap:wrap;gap:8px}
+  .reset{background:none;border:1px solid var(--line);color:#8a7a62;border-radius:8px;
+    padding:5px 12px;font-family:inherit;font-size:12px;cursor:pointer}
+  .reset:hover{border-color:#a04a3a;color:#c87a5a}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+    background:#231a10;border:1px solid #6a4d22;color:var(--cream);padding:10px 18px;border-radius:12px;
+    font-size:13px;opacity:0;pointer-events:none;transition:opacity .3s, transform .3s;z-index:40}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+</style>
+</head>
+<body>
+<a class="back" href="../index.html">← funlab</a>
+
+<div class="wrap">
+  <!-- LEFT: stage -->
+  <div class="stage">
+    <div class="title">축적된 마나</div>
+    <div class="mana" id="manaEl">0<span class="unit">✦</span></div>
+    <div class="rate" id="rateEl">초당 <b>0</b> ✦/s</div>
+    <div class="perclick" id="clickEl">클릭당 +1 ✦</div>
+
+    <div class="orbwrap">
+      <div class="orb" id="orb"><div class="sigil">✦</div></div>
+    </div>
+    <div class="hint" id="hintEl">정수를 눌러 마나를 끌어모아라</div>
+  </div>
+
+  <!-- RIGHT: shop -->
+  <div class="shop">
+    <div class="shead">
+      <h2>제단 · 상점</h2>
+      <span class="tag" id="shopTag"></span>
+    </div>
+    <div class="sectlabel">생성기 · 초당 마나</div>
+    <div id="genList"></div>
+    <div class="sectlabel">클릭 증폭</div>
+    <div id="mulList"></div>
+  </div>
+
+  <div class="footer">
+    <span id="statLine"></span>
+    <button class="reset" id="resetBtn">처음부터</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+(function(){
+const SAVE_KEY = "funlab:idle:v1";
+
+// ----- definitions -----
+// PASSIVE generators: baseCost, perSec, growth 1.15, unlock threshold (total mana ever seen)
+const GENERATORS = [
+  {id:"firefly", name:"반딧불",  icon:"🟡", color:"rgba(255,220,120,.5)", base:10,    per:0.2,  unlock:0},
+  {id:"rune",    name:"룬돌",    icon:"🪨", color:"rgba(180,200,255,.45)",base:120,   per:1,    unlock:60},
+  {id:"sprite",  name:"정령",    icon:"🧚", color:"rgba(160,255,210,.45)",base:1100,  per:5,    unlock:500},
+  {id:"spire",   name:"첨탑",    icon:"🗼", color:"rgba(255,170,90,.5)",  base:13000, per:25,   unlock:6000},
+  {id:"dragon",  name:"용맥",    icon:"🐉", color:"rgba(255,120,90,.55)", base:160000,per:140,  unlock:80000},
+  {id:"star",    name:"별의 우물",icon:"🌟", color:"rgba(255,240,180,.6)", base:2.0e6, per:780,  unlock:1.0e6},
+  {id:"rift",    name:"균열",    icon:"🌀", color:"rgba(200,140,255,.5)", base:2.5e7, per:4400, unlock:1.3e7},
+  {id:"cosmos",  name:"성좌 기관",icon:"🌌", color:"rgba(150,180,255,.55)",base:3.3e8, per:26000,unlock:1.7e8},
+];
+// CLICK multipliers: one-time-ish, repeatable, each doubles click power, cost grows hard
+const MULTIPLIERS = [
+  {id:"focus",  name:"집중",    icon:"🔆", color:"rgba(255,200,110,.55)",base:100,    growth:6, mult:2, unlock:30,
+    desc:"클릭당 마나 ×2"},
+  {id:"conduit",name:"전도체",  icon:"⚡", color:"rgba(255,230,120,.6)", base:6000,   growth:7, mult:2, unlock:3000,
+    desc:"클릭당 마나 ×2"},
+  {id:"avatar", name:"화신",    icon:"👑", color:"rgba(255,170,90,.6)",  base:450000, growth:8, mult:3, unlock:200000,
+    desc:"클릭당 마나 ×3"},
+];
+
+// ----- state -----
+let state = {
+  mana: 0,
+  totalEver: 0,      // for unlock thresholds + offline cap reference
+  baseClick: 1,
+  gen: {},           // id -> count
+  mul: {},           // id -> count
+  lastSeen: Date.now(),
+};
+GENERATORS.forEach(g=>state.gen[g.id]=0);
+MULTIPLIERS.forEach(m=>state.mul[m.id]=0);
+
+function load(){
+  try{
+    const raw = localStorage.getItem(SAVE_KEY);
+    if(!raw) return false;
+    const s = JSON.parse(raw);
+    state.mana = +s.mana || 0;
+    state.totalEver = +s.totalEver || state.mana;
+    state.baseClick = +s.baseClick || 1;
+    state.lastSeen = +s.lastSeen || Date.now();
+    GENERATORS.forEach(g=> state.gen[g.id] = (s.gen && +s.gen[g.id]) || 0);
+    MULTIPLIERS.forEach(m=> state.mul[m.id] = (s.mul && +s.mul[m.id]) || 0);
+    return true;
+  }catch(e){ return false; }
+}
+let saveTimer=null;
+function save(){
+  state.lastSeen = Date.now();
+  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }catch(e){}
+}
+function saveSoon(){ if(saveTimer) return; saveTimer=setTimeout(()=>{saveTimer=null;save();}, 800); }
+
+// ----- derived -----
+function costOf(def, owned){ return def.base * Math.pow(1.15, owned); }      // generators
+function mulCostOf(def, owned){ return def.base * Math.pow(def.growth, owned); } // click multipliers
+function manaPerSec(){
+  let s=0;
+  GENERATORS.forEach(g=> s += state.gen[g.id]*g.per);
+  return s;
+}
+function clickPower(){
+  let p = state.baseClick;
+  MULTIPLIERS.forEach(m=> { for(let i=0;i<state.mul[m.id];i++) p *= m.mult; });
+  return p;
+}
+
+// ----- number formatting K/M/B/T... -----
+const SUF = ["","K","M","B","T","Qa","Qi","Sx","Sp","Oc","No","Dc"];
+function fmt(n){
+  if(n < 0) return "0";
+  if(n < 1000){
+    // small numbers: show up to 1 decimal if fractional and <100
+    if(n < 100 && n % 1 !== 0) return (Math.round(n*10)/10).toString();
+    return Math.floor(n).toString();
+  }
+  let tier = Math.floor(Math.log10(n)/3);
+  if(tier >= SUF.length) tier = SUF.length-1;
+  const scaled = n / Math.pow(10, tier*3);
+  let str = scaled.toFixed(scaled < 10 ? 2 : scaled < 100 ? 1 : 0);
+  // trim trailing zeros
+  if(str.indexOf(".")>=0) str = str.replace(/\.?0+$/,"");
+  return str + SUF[tier];
+}
+function fmtRate(n){
+  if(n>=1000) return fmt(n);
+  if(n % 1 === 0) return n.toString();
+  return (Math.round(n*10)/10).toString();
+}
+
+// ----- DOM refs -----
+const manaEl = document.getElementById("manaEl");
+const rateEl = document.getElementById("rateEl");
+const clickEl= document.getElementById("clickEl");
+const orb    = document.getElementById("orb");
+const orbwrap= document.querySelector(".orbwrap");
+const hintEl = document.getElementById("hintEl");
+const genList= document.getElementById("genList");
+const mulList= document.getElementById("mulList");
+const statLine=document.getElementById("statLine");
+const shopTag =document.getElementById("shopTag");
+const toastEl =document.getElementById("toast");
+
+// ----- build shop rows -----
+function buildRows(defs, container, kind){
+  defs.forEach(def=>{
+    const el = document.createElement("div");
+    el.className = "item locked";
+    el.dataset.id = def.id;
+    el.dataset.kind = kind;
+    el.innerHTML = `
+      <div class="icon"><span class="glow" style="--c:${def.color}"></span>${def.icon}</div>
+      <div class="meta">
+        <div class="nm"><span class="nmtxt"></span><span class="owned zero">0</span></div>
+        <div class="desc"></div>
+      </div>
+      <div class="buy"><span class="price">—</span><small>비용</small></div>`;
+    el.addEventListener("click", ()=>buy(kind, def.id, el));
+    container.appendChild(el);
+    def._el = el;
+  });
+}
+buildRows(GENERATORS, genList, "gen");
+buildRows(MULTIPLIERS, mulList, "mul");
+
+// ----- buy -----
+function buy(kind, id, el){
+  const def = (kind==="gen"?GENERATORS:MULTIPLIERS).find(d=>d.id===id);
+  const owned = (kind==="gen"?state.gen:state.mul)[id];
+  if(unlockThreshold(def) > state.totalEver) return; // still locked
+  const cost = kind==="gen"? costOf(def, owned) : mulCostOf(def, owned);
+  if(state.mana < cost){
+    el.classList.add("cant");
+    setTimeout(()=>el.classList.remove("cant"), 250);
+    return;
+  }
+  state.mana -= cost;
+  if(kind==="gen") state.gen[id]++; else state.mul[id]++;
+  el.classList.remove("justbought"); void el.offsetWidth;
+  el.classList.add("justbought");
+  if(kind==="gen"){
+    toast(`${def.name} 획득 · +${fmtRate(def.per)} ✦/s`);
+  }else{
+    toast(`${def.name} · 클릭 ×${def.mult}!`);
+  }
+  render();
+  save();
+}
+function unlockThreshold(def){ return def.unlock; }
+
+// ----- orb click -----
+function gainClick(x,y){
+  const p = clickPower();
+  state.mana += p;
+  state.totalEver += p;
+  // floating number
+  const f = document.createElement("div");
+  f.className="float";
+  f.textContent = "+"+fmt(p);
+  orbwrap.appendChild(f);
+  setTimeout(()=>f.remove(), 900);
+  // flash
+  orb.classList.remove("flash"); void orb.offsetWidth; orb.classList.add("flash");
+  manaEl.classList.remove("bump"); void manaEl.offsetWidth; manaEl.classList.add("bump");
+  render();
+  saveSoon();
+}
+orb.addEventListener("click", (e)=>gainClick(e.clientX, e.clientY));
+// keyboard: space hits the orb
+window.addEventListener("keydown",(e)=>{
+  if(e.code==="Space" && document.activeElement!==document.getElementById("resetBtn")){
+    e.preventDefault(); gainClick();
+  }
+});
+
+// ----- tick loop (passive income) -----
+let lastTick = performance.now();
+function tick(now){
+  const dt = Math.min(0.5, (now - lastTick)/1000); // clamp dt (tab refocus)
+  lastTick = now;
+  const rate = manaPerSec();
+  if(rate>0){
+    const gain = rate*dt;
+    state.mana += gain;
+    state.totalEver += gain;
+  }
+  render();
+  requestAnimationFrame(tick);
+}
+
+// ----- render -----
+let lastUnlockCount = -1;
+function render(){
+  manaEl.innerHTML = fmt(state.mana) + '<span class="unit">✦</span>';
+  const rate = manaPerSec();
+  rateEl.innerHTML = "초당 <b>"+fmtRate(rate)+"</b> ✦/s";
+  const cp = clickPower();
+  clickEl.textContent = "클릭당 +"+fmt(cp)+" ✦";
+
+  let unlockedCount=0, ownedTotal=0;
+  // generators
+  GENERATORS.forEach(def=>{
+    const el = def._el, owned = state.gen[def.id];
+    ownedTotal += owned;
+    const unlocked = state.totalEver >= def.unlock;
+    updateRow(el, def, owned, unlocked, "gen", rate);
+    if(unlocked) unlockedCount++;
+  });
+  MULTIPLIERS.forEach(def=>{
+    const el = def._el, owned = state.mul[def.id];
+    const unlocked = state.totalEver >= def.unlock;
+    updateRow(el, def, owned, unlocked, "mul", rate);
+  });
+
+  shopTag.textContent = unlockedCount + "/" + GENERATORS.length + " 생성기 해금";
+  statLine.textContent = "총 생성기 "+ownedTotal+"기 · 평생 마나 "+fmt(state.totalEver)+" ✦";
+}
+
+function updateRow(el, def, owned, unlocked, kind, rate){
+  if(!unlocked){
+    if(!el.classList.contains("locked")){
+      el.classList.add("locked");
+    }
+    el.querySelector(".nmtxt").textContent = "???";
+    el.querySelector(".owned").textContent = "0";
+    el.querySelector(".owned").classList.add("zero");
+    el.querySelector(".desc").innerHTML =
+      '<span style="color:#7c6d58">해금: 평생 '+fmt(def.unlock)+' ✦</span>';
+    el.querySelector(".price").textContent = "🔒";
+    el.querySelector(".buy small").textContent="잠김";
+    el.querySelector(".icon").style.filter="grayscale(1)";
+    return;
+  }
+  el.classList.remove("locked");
+  el.querySelector(".icon").style.filter="";
+  el.querySelector(".nmtxt").textContent = def.name;
+  const ownedEl = el.querySelector(".owned");
+  ownedEl.textContent = owned;
+  ownedEl.classList.toggle("zero", owned===0);
+
+  const cost = kind==="gen"? costOf(def, owned) : mulCostOf(def, owned);
+  el.querySelector(".price").textContent = fmt(cost);
+  const afford = state.mana >= cost;
+  el.querySelector(".buy small").textContent = afford ? "구매가능" : "비용";
+  el.style.opacity = afford ? "1" : "";
+
+  if(kind==="gen"){
+    const totalOut = owned*def.per;
+    el.querySelector(".desc").innerHTML =
+      '<span class="out">+'+fmtRate(def.per)+' ✦/s</span>' +
+      (owned>0 ? ' · 합계 <span class="out">'+fmtRate(totalOut)+'/s</span>' : '');
+  }else{
+    el.querySelector(".desc").innerHTML =
+      '<span class="clickp">'+def.desc+'</span>' +
+      (owned>0 ? ' · 현재 ×'+fmt(Math.pow(def.mult,owned)) : '');
+  }
+}
+
+// ----- toast -----
+let toastTimer=null;
+function toast(msg){
+  toastEl.textContent=msg; toastEl.classList.add("show");
+  if(toastTimer)clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>toastEl.classList.remove("show"),1600);
+}
+
+// ----- offline progress -----
+function applyOffline(){
+  const now=Date.now();
+  const dt=(now - state.lastSeen)/1000;
+  if(dt < 30) return;            // ignore short gaps
+  const rate=manaPerSec();
+  if(rate<=0) return;
+  const capped = Math.min(dt, 2*3600);   // cap at 2 hours of catch-up
+  const gain = rate*capped*0.5;          // modest: 50% efficiency offline
+  if(gain<1) return;
+  state.mana += gain; state.totalEver += gain;
+  setTimeout(()=>toast("자리 비운 사이 +"+fmt(gain)+" ✦ 모음"), 500);
+}
+
+// ----- reset -----
+document.getElementById("resetBtn").addEventListener("click",()=>{
+  if(!confirm("정말 처음부터 다시 시작할까요? 모든 마나와 생성기가 사라집니다.")) return;
+  localStorage.removeItem(SAVE_KEY);
+  state.mana=0; state.totalEver=0; state.baseClick=1;
+  GENERATORS.forEach(g=>state.gen[g.id]=0);
+  MULTIPLIERS.forEach(m=>state.mul[m.id]=0);
+  lastUnlockCount=-1;
+  render(); save();
+});
+
+// hide hint after first interaction
+let hintGone=false;
+function killHint(){ if(hintGone)return; hintGone=true; setTimeout(()=>hintEl.style.opacity=".0",100); }
+orb.addEventListener("click",killHint,{once:true});
+
+// periodic save
+setInterval(save, 10000);
+window.addEventListener("beforeunload", save);
+document.addEventListener("visibilitychange",()=>{ if(document.hidden) save(); });
+
+// ----- boot -----
+if(load()){ applyOffline(); }
+render();
+save();
+requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

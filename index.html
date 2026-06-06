@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>funlab · grand research on game</title>
+<style>
+  :root{--bg:#14110d;--panel:#1d1812;--line:#3a3024;--cream:#f6ead8;--ink:#e7dcc8;--muted:#a9977e;--amber:#ffb154;--green:#9fd49a}
+  *{margin:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;line-height:1.6;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%)}
+  .wrap{max-width:920px;margin:0 auto;padding:56px 22px 100px}
+  h1{font-size:34px;font-weight:800;background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);font-size:14.5px;margin-top:8px;max-width:620px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-top:30px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+  .card .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .card h3{font-size:18px;color:var(--cream);font-weight:800}
+  .ref{font-size:11px;color:var(--muted);white-space:nowrap}
+  .essence{font-size:13.5px;color:var(--ink)}
+  .nerve{font-size:11px;color:var(--amber);letter-spacing:.5px}
+  .hero{border-color:#6a4d22;background:#231a10}
+  .hero h3::after{content:" ★";color:var(--amber)}
+  .play{display:inline-block;margin-top:4px;align-self:flex-start;background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;
+    font-weight:800;text-decoration:none;padding:8px 18px;border-radius:24px;font-size:13.5px}
+  .play:active{transform:scale(.96)}
+  .score{margin-top:6px;border-top:1px solid var(--line);padding-top:10px}
+  .score .lbl{font-size:11.5px;color:var(--muted);margin-bottom:5px}
+  .nums{display:flex;gap:3px;flex-wrap:wrap}
+  .nums button{width:26px;height:26px;border:1px solid var(--line);background:#241c12;color:var(--ink);border-radius:7px;cursor:pointer;font-size:12px;font-weight:700}
+  .nums button:hover{border-color:#7a5a30}
+  .nums button.on{background:var(--amber);color:#241400;border-color:var(--amber)}
+  .note{width:100%;margin-top:7px;background:#11100a;border:1px solid var(--line);border-radius:8px;color:var(--ink);
+    font-family:inherit;font-size:12.5px;padding:6px 9px;resize:vertical;min-height:34px}
+  .summary{margin-top:18px;color:var(--muted);font-size:13px}
+  footer{margin-top:50px;color:#7c6d58;font-size:12px;border-top:1px solid var(--line);padding-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>funlab</h1>
+  <p class="sub">그랜드 리서치 온 "게임" — 검증된 게임들의 <b>에센스</b>만 한 줄로 뽑아, 에셋 0로 프로토타입. <b>각 미니겜을 플레이하고, 벌거벗고도 재밌나 1–10으로 score.</b> (이번 배치 = power/소유/discovery nerve로 bias.)</p>
+  <div class="summary" id="summary"></div>
+  <div class="grid" id="grid"></div>
+  <footer>점수는 이 브라우저에 저장돼(localStorage). · batch 1 — 더 추가될 예정.</footer>
+</div>
+
+<script>
+const GAMES=[
+  {slug:'magic', title:'마법진', ref:'(우리 가설)', hero:true,
+   essence:'남들은 없는 마법을 *발견*해 *소유*하고, 그걸 보여준다.', nerve:'discovery ⊗ 소유 ⊗ power ⊗ flex'},
+  {slug:'merge', title:'머지', ref:'2048',
+   essence:'같은 둘을 합쳐 더 큰 하나로. 판을 다스린다.', nerve:'mastery ⊗ order'},
+  {slug:'luck', title:'한 번 더?', ref:'Balatro / press-your-luck',
+   essence:'뒤집을수록 배수가 쌓인다 — 챙길까, 한 번 더 갈까.', nerve:'risk ⊗ tension ⊗ power-combo'},
+  {slug:'idle', title:'점점 강해짐', ref:'Cookie Clicker',
+   essence:'숫자가 오르고, 더 빨리 오르게 하는 걸 산다.', nerve:'accumulation ⊗ growth'},
+  {slug:'alchemy', title:'조합 발견', ref:'Little Alchemy',
+   essence:'둘을 합쳐 새로운 걸 발견하고, 다 모은다.', nerve:'discovery ⊗ collection'},
+];
+
+const grid=document.getElementById('grid');
+function k(s,t){return 'funlab:'+s+':'+t}
+GAMES.forEach(g=>{
+  const card=document.createElement('div');
+  card.className='card'+(g.hero?' hero':'');
+  const saved=localStorage.getItem(k(g.slug,'score'));
+  let nums='';
+  for(let i=1;i<=10;i++) nums+=`<button data-n="${i}" class="${saved==i?'on':''}">${i}</button>`;
+  card.innerHTML=`
+    <div class="top"><h3>${g.title}</h3><span class="ref">${g.ref}</span></div>
+    <div class="essence">${g.essence.replace(/\*(.+?)\*/g,'<b>$1</b>')}</div>
+    <div class="nerve">${g.nerve}</div>
+    <a class="play" href="games/${g.slug}.html" target="_blank">▶ 플레이</a>
+    <div class="score">
+      <div class="lbl">재밌었나? (1 = 노잼, 10 = 이건 진짜)</div>
+      <div class="nums">${nums}</div>
+      <textarea class="note" placeholder="💭 한 줄 메모…">${localStorage.getItem(k(g.slug,'note'))||''}</textarea>
+    </div>`;
+  card.querySelectorAll('.nums button').forEach(b=>b.onclick=()=>{
+    localStorage.setItem(k(g.slug,'score'),b.dataset.n);
+    card.querySelectorAll('.nums button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); renderSummary();
+  });
+  card.querySelector('.note').onblur=e=>localStorage.setItem(k(g.slug,'note'),e.target.value);
+  grid.appendChild(card);
+});
+function renderSummary(){
+  const scored=GAMES.map(g=>+localStorage.getItem(k(g.slug,'score'))).filter(Boolean);
+  const s=document.getElementById('summary');
+  if(!scored.length){s.textContent='아직 score 0개 — 하나씩 플레이하고 점수 매겨봐.';return}
+  const avg=(scored.reduce((a,b)=>a+b,0)/scored.length).toFixed(1);
+  s.innerHTML=`scored <b>${scored.length}/${GAMES.length}</b> · 평균 <b>${avg}</b>`;
+}
+renderSummary();
+</script>
+</body>
+</html>

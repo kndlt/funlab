@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>머지 · 2048</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:1/1;touch-action:none}
+  .bg{position:absolute;inset:var(--gap);display:grid;grid-template-columns:repeat(4,1fr);
+    grid-template-rows:repeat(4,1fr);gap:var(--gap)}
+  .bg .slot{background:var(--cell);border-radius:9px}
+  .tiles{position:absolute;inset:var(--gap)}
+  .tile{position:absolute;border-radius:9px;display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-variant-numeric:tabular-nums;
+    transition:left .12s ease,top .12s ease;will-change:left,top}
+  .tile .num{transition:transform .09s ease}
+  .pop{animation:pop .16s ease}
+  .spawn{animation:spawn .14s ease}
+  @keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.18)}100%{transform:scale(1)}}
+  @keyframes spawn{0%{transform:scale(.1);opacity:.2}100%{transform:scale(1);opacity:1}}
+  .over{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    animation:fade .25s ease}
+  .over.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .over .msg{font-size:22px;font-weight:800;color:var(--cream);text-align:center}
+  .over .msg b{color:var(--amber)}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">머지<span class="ref">같은 둘을 합쳐 더 큰 하나로 · 2048</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">점수</div><div class="val" id="score">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">방향키 / WASD / 스와이프</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <div class="bg" id="bg"></div>
+    <div class="tiles" id="tiles"></div>
+    <div class="over" id="over">
+      <div class="msg" id="overMsg"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">2 + 2 = 4 … 4 + 4 = 8 … 판이 꽉 차고 합칠 수 없으면 끝.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const N = 4;
+  const BEST_KEY = "funlab:merge:best";
+
+  // --- color palette: warm cream -> amber -> violet ---------------------
+  const COLORS = {
+    2:    {bg:"#efe2cc", fg:"#5b4a30"},
+    4:    {bg:"#ecd6a8", fg:"#5b4a30"},
+    8:    {bg:"#f5b86b", fg:"#3a2608"},
+    16:   {bg:"#f3a04e", fg:"#3a2608"},
+    32:   {bg:"#ef8742", fg:"#fff6e9"},
+    64:   {bg:"#e96d35", fg:"#fff6e9"},
+    128:  {bg:"#e2542e", fg:"#fff6e9"},
+    256:  {bg:"#d83c4a", fg:"#fff6e9"},
+    512:  {bg:"#c12f6e", fg:"#fff6e9"},
+    1024: {bg:"#9c2f8e", fg:"#fff6e9"},
+    2048: {bg:"#7b2fa6", fg:"#fff6e9"},
+    4096: {bg:"#5a2fb0", fg:"#fff6e9"},
+    8192: {bg:"#3f2fb0", fg:"#fff6e9"}
+  };
+  function colorFor(v){ return COLORS[v] || COLORS[8192]; }
+  function fontFor(v){
+    const d = String(v).length;
+    if(d <= 2) return 46;
+    if(d === 3) return 38;
+    if(d === 4) return 30;
+    return 24;
+  }
+
+  // --- state ------------------------------------------------------------
+  // grid holds tile objects or null. each tile: {id, val, el}
+  let grid, score, best, over, busy;
+  let uid = 1;
+
+  const bgEl = document.getElementById("bg");
+  const tilesEl = document.getElementById("tiles");
+  const scoreEl = document.getElementById("score");
+  const bestEl = document.getElementById("best");
+  const overEl = document.getElementById("over");
+  const overMsgEl = document.getElementById("overMsg");
+  const boardEl = document.getElementById("board");
+
+  // background slots
+  for(let i=0;i<N*N;i++){ const s=document.createElement("div"); s.className="slot"; bgEl.appendChild(s); }
+
+  function emptyGrid(){ return Array.from({length:N},()=>Array(N).fill(null)); }
+
+  function init(){
+    grid = emptyGrid();
+    score = 0;
+    over = false;
+    busy = false;
+    best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+    tilesEl.innerHTML = "";
+    overEl.classList.remove("show");
+    spawn(); spawn();
+    render(true);
+    updateScores();
+  }
+
+  function randomEmpty(){
+    const cells=[];
+    for(let r=0;r<N;r++) for(let c=0;c<N;c++) if(!grid[r][c]) cells.push([r,c]);
+    if(!cells.length) return null;
+    return cells[Math.floor(Math.random()*cells.length)];
+  }
+
+  function spawn(){
+    const cell = randomEmpty();
+    if(!cell) return null;
+    const [r,c] = cell;
+    const val = Math.random() < 0.9 ? 2 : 4;
+    const el = document.createElement("div");
+    el.className = "tile";
+    const tile = {id:uid++, val, el, justSpawned:true};
+    grid[r][c] = tile;
+    tilesEl.appendChild(el);
+    return tile;
+  }
+
+  // place a tile element at logical [r,c]
+  function placeEl(el, r, c){
+    const step = 100/N;            // percent per cell incl gap handled by grid math
+    // We position using calc relative to the tiles container, which already
+    // sits inside the board padding. Each cell = (100% - 3*gap)/4 ; gaps between.
+    el.style.left = `calc(${c} * (100% + var(--gap)) / ${N})`;
+    el.style.top  = `calc(${r} * (100% + var(--gap)) / ${N})`;
+    el.style.width  = `calc((100% - ${N-1} * var(--gap)) / ${N})`;
+    el.style.height = `calc((100% - ${N-1} * var(--gap)) / ${N})`;
+  }
+
+  function styleTile(tile){
+    const {el,val} = tile;
+    const col = colorFor(val);
+    el.style.background = col.bg;
+    el.style.color = col.fg;
+    el.style.fontSize = fontFor(val)+"px";
+    el.innerHTML = `<span class="num">${val}</span>`;
+  }
+
+  function render(initial){
+    for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+      const t = grid[r][c];
+      if(!t) continue;
+      styleTile(t);
+      placeEl(t.el, r, c);
+      if(t.justSpawned){
+        t.el.classList.add("spawn");
+        t.justSpawned = false;
+        const el=t.el;
+        el.addEventListener("animationend",()=>el.classList.remove("spawn"),{once:true});
+      }
+      if(t.merged){
+        const num = t.el.querySelector(".num");
+        num.classList.remove("pop");
+        void num.offsetWidth; // reflow to restart anim
+        num.classList.add("pop");
+        t.merged = false;
+      }
+    }
+  }
+
+  function updateScores(){
+    scoreEl.textContent = score;
+    bestEl.textContent = best;
+  }
+
+  // --- movement ---------------------------------------------------------
+  // For a given direction, build the list of lines (each an array of cells in
+  // travel order), slide+merge each, write back.
+  // dir: 'left','right','up','down'
+  function move(dir){
+    if(busy || over) return;
+    let changed = false;
+    const merges = []; // tiles that should pop
+
+    const lines = buildLines(dir);
+    for(const line of lines){
+      // line = array of [r,c] in the order tiles travel toward (front first)
+      const tiles = line.map(([r,c]) => grid[r][c]).filter(Boolean);
+      const result = [];   // resulting tiles in order
+      for(let i=0;i<tiles.length;i++){
+        const t = tiles[i];
+        const next = tiles[i+1];
+        if(next && next.val === t.val){
+          // merge t (kept) + next (removed) into doubled value
+          t.val *= 2;
+          t.merged = true;
+          score += t.val;
+          merges.push(t);
+          // remove the absorbed tile's element after it slides in
+          absorb(next, line, result.length, dir);
+          i++; // skip next
+        }
+        result.push(t);
+      }
+      // write back: result fills front of line, rest null
+      for(let i=0;i<line.length;i++){
+        const [r,c] = line[i];
+        const t = result[i] || null;
+        if(grid[r][c] !== t){
+          changed = true;
+        }
+        grid[r][c] = t;
+      }
+    }
+
+    if(!changed) return;
+
+    busy = true;
+    // animate slide to new positions
+    for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+      const t = grid[r][c];
+      if(t) placeEl(t.el, r, c);
+    }
+
+    if(score > best){ best = score; localStorage.setItem(BEST_KEY, String(best)); }
+    updateScores();
+
+    // after slide finishes: spawn + pop, then check game over
+    setTimeout(()=>{
+      // pop merged tiles
+      for(const t of merges){
+        const num = t.el.querySelector(".num");
+        styleTile(t);
+        const n2 = t.el.querySelector(".num");
+        n2.classList.add("pop");
+        n2.addEventListener("animationend",()=>n2.classList.remove("pop"),{once:true});
+      }
+      spawn();
+      render();
+      busy = false;
+      if(isGameOver()){
+        over = true;
+        overMsgEl.innerHTML = `게임 끝 · 점수 <b>${score}</b>`;
+        overEl.classList.add("show");
+      }
+    }, 120);
+  }
+
+  // remove an absorbed tile: slide its element to the merge target cell, then drop it
+  function absorb(tile, line, targetIndex, dir){
+    const [r,c] = line[targetIndex];
+    placeEl(tile.el, r, c);
+    const el = tile.el;
+    setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); }, 120);
+  }
+
+  // build travel-ordered lines for a direction
+  function buildLines(dir){
+    const lines = [];
+    if(dir === "left"){
+      for(let r=0;r<N;r++){ const line=[]; for(let c=0;c<N;c++) line.push([r,c]); lines.push(line); }
+    } else if(dir === "right"){
+      for(let r=0;r<N;r++){ const line=[]; for(let c=N-1;c>=0;c--) line.push([r,c]); lines.push(line); }
+    } else if(dir === "up"){
+      for(let c=0;c<N;c++){ const line=[]; for(let r=0;r<N;r++) line.push([r,c]); lines.push(line); }
+    } else if(dir === "down"){
+      for(let c=0;c<N;c++){ const line=[]; for(let r=N-1;r>=0;r--) line.push([r,c]); lines.push(line); }
+    }
+    return lines;
+  }
+
+  function isGameOver(){
+    for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+      if(!grid[r][c]) return false;
+      const v = grid[r][c].val;
+      if(c+1<N && grid[r][c+1] && grid[r][c+1].val===v) return false;
+      if(r+1<N && grid[r+1][c] && grid[r+1][c].val===v) return false;
+    }
+    return true;
+  }
+
+  // --- input ------------------------------------------------------------
+  const KEYMAP = {
+    ArrowLeft:"left", ArrowRight:"right", ArrowUp:"up", ArrowDown:"down",
+    a:"left", d:"right", w:"up", s:"down",
+    A:"left", D:"right", W:"up", S:"down",
+    h:"left", l:"right", k:"up", j:"down"
+  };
+  window.addEventListener("keydown", e=>{
+    const dir = KEYMAP[e.key];
+    if(dir){ e.preventDefault(); move(dir); }
+  });
+
+  // touch swipe
+  let tStart=null;
+  boardEl.addEventListener("touchstart", e=>{
+    const t=e.changedTouches[0]; tStart={x:t.clientX,y:t.clientY};
+  }, {passive:true});
+  boardEl.addEventListener("touchend", e=>{
+    if(!tStart) return;
+    const t=e.changedTouches[0];
+    const dx=t.clientX-tStart.x, dy=t.clientY-tStart.y;
+    const ax=Math.abs(dx), ay=Math.abs(dy);
+    tStart=null;
+    if(Math.max(ax,ay) < 24) return; // too small
+    if(ax>ay) move(dx>0?"right":"left");
+    else move(dy>0?"down":"up");
+  }, {passive:true});
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+})();
+</script>
+<style>
+  :root{ --gap: 12px; }
+  @media (max-width:380px){ :root{ --gap:10px; } }
+</style>
+</body>
+</html>
