@@ -4,6 +4,15 @@ Distill the **essence** of proven games into one line each → build a tiny **no
 
 > The question isn't "is the polished thing fun" — it's **"is the bare essence fun?"** Polish is amplification, not salvation.
 
+## Two signals
+
+Each game carries an **essence/nerve** — a one-line hypothesis about *why* it might grip someone. To test that hypothesis empirically we collect two layers of signal:
+
+- **Explicit** — the player's 1–10 score + one-line note. What they *say*.
+- **Implicit** — gameplay telemetry: sessions, time-on-game, runs, scores, where they drop off, do they come back. What they *do*.
+
+The long arc: funlab becomes a **discovery engine** — stream real play data per game and let behavior, not just stars, reveal which essence actually has a grip. Every layer is keyed by the game's `slug` (static path → ratings row → play-event → future Durable Object room), so a new game plugs into the whole pipeline by dropping one folder.
+
 ## Run
 
 It's a static site — no build step.
@@ -18,17 +27,21 @@ Open `index.html`, click into each mini-game (opens in a new tab), play it, come
 ## Structure
 
 ```
-index.html        # the portal: lists games, holds your scores
+index.html             # the portal: lists games, holds your scores
 games/
-  magic.html      # ★ 마법진  — discover unique magic → own it → show it off
-  merge.html      #   머지     — 2048: combine two into a bigger one
-  luck.html       #   한 번 더? — press-your-luck: stack the multiplier or bank it
-  idle.html       #   점점 강해짐 — Cookie-Clicker: numbers go up, buy more up
-  alchemy.html    #   조합 발견 — Little Alchemy: combine to discover, collect all
-LICENSE           # MIT
+  <slug>/
+    index.html         # one self-contained game (no libraries, no assets)
+  magic/index.html     # ★ 마법진  — discover unique magic → own it → show it off
+  snake/index.html     #   스네이크 — eat and grow, don't bite yourself
+  reigns/index.html    #   왕의 선택 — swipe left/right, keep the kingdom alive
+  ...                  #   15 games across the nerve space
+LICENSE                # MIT
 ```
 
-Each game is a single self-contained HTML file (no libraries, no assets) — so it's a "monorepo of independent games" with zero tooling.
+Each game lives in its own folder so it can grow its own assets later, but
+today each is a single self-contained HTML file (no libraries, no assets) —
+a "monorepo of independent games" with zero tooling. The `slug` (folder name)
+is the boundary key threaded through every layer.
 
 ## Batch 1 — nerve coverage
 
