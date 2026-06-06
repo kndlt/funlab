@@ -1,0 +1,13 @@
+# Everything here is NOT part of the deployed site (gitignore syntax).
+# The shipped site is index.html + games/<slug>/index.html only.
+.git
+.gitignore
+.assetsignore
+wrangler.jsonc
+.wrangler
+node_modules
+package.json
+package-lock.json
+README.md
+LICENSE
+supabase

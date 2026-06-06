@@ -1,0 +1,16 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "funlab",
+	"compatibility_date": "2025-08-20",
+	// Static-assets-only for now (no `main`): the whole site is hand-written
+	// HTML under games/<slug>/ plus the portal index.html. A Worker script +
+	// Durable Objects get added here later for real-time play, keeping the
+	// same slug boundary. Directory paths resolve to their index.html, so
+	// games/<slug>/ serves games/<slug>/index.html automatically.
+	"assets": {
+		"directory": "."
+	},
+	"routes": [
+		{ "pattern": "funlab.sprited.ai", "custom_domain": true }
+	]
+}
