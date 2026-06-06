@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>반응속도 · Reaction Test</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:manipulation; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .pad{
+    position:relative;width:100%;aspect-ratio:1/1;border-radius:14px;border:1px solid var(--line);
+    background:var(--panel);cursor:pointer;overflow:hidden;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+    text-align:center;padding:24px;transition:background .08s ease;
+  }
+  .pad .big{font-size:34px;font-weight:800;line-height:1.2;color:var(--cream)}
+  .pad .sub{font-size:14px;color:var(--muted);max-width:300px;line-height:1.6}
+  .pad .label{font-size:15px;font-weight:800;letter-spacing:1px;margin-top:2px}
+  /* state: idle (before first start) */
+  .pad.idle{background:var(--panel)}
+  .pad.idle .big{background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  /* state: waiting (red — do NOT tap) */
+  .pad.wait{background:radial-gradient(120% 100% at 50% 0%,#5a1d14,#3a1009);border-color:#71261a}
+  .pad.wait .big{color:#ffd9cf}
+  .pad.wait .sub{color:#e8a99a}
+  /* state: go (green — TAP NOW) */
+  .pad.go{background:radial-gradient(120% 100% at 50% 0%,#39d27a,#1c9b54);border-color:#3fe089}
+  .pad.go .big{color:#06200f}
+  .pad.go .sub{color:#0a3d20}
+  /* state: result */
+  .pad.result{background:var(--panel)}
+  .pad.result .big{color:var(--amber)}
+  /* state: too early */
+  .pad.early{background:radial-gradient(120% 100% at 50% 0%,#6a2410,#3a1206);border-color:#8a3318}
+  .pad.early .big{color:#ffcfa8}
+  .pad.early .sub{color:#e8b08a}
+  .pad:active{transform:scale(.992)}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">반응속도<span class="ref">초록으로 바뀌는 순간, 탭 · Reaction Test</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">last</div><div class="val" id="last">—</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">—</div></div>
+    </div>
+  </div>
+
+  <div class="pad idle" id="pad">
+    <div class="big" id="big">반응속도</div>
+    <div class="sub" id="sub">탭하면 시작. 초록으로 바뀌는 순간 다시 탭.</div>
+    <div class="label" id="label"></div>
+  </div>
+
+  <div class="foot">빨강에서 초록으로 — 그 찰나에 손가락이 닿아야 한다. 빨강에 박으면 실격.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const BEST_KEY = "funlab:reflex:best";
+  const MIN_DELAY = 1200;   // ms — earliest the light can turn green
+  const MAX_DELAY = 3500;   // ms — latest
+
+  const pad   = document.getElementById("pad");
+  const big   = document.getElementById("big");
+  const sub   = document.getElementById("sub");
+  const label = document.getElementById("label");
+  const lastEl= document.getElementById("last");
+  const bestEl= document.getElementById("best");
+
+  let state;          // 'idle' | 'wait' | 'go' | 'result' | 'early'
+  let timer = null;   // pending green-light timeout
+  let goTime = 0;     // performance.now() at the green flip
+  let best;
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "", 10);
+  if(!Number.isFinite(best)) best = null;
+  bestEl.textContent = (best === null) ? "—" : best;
+
+  function setState(s){
+    state = s;
+    pad.classList.remove("idle","wait","go","result","early");
+    pad.classList.add(s);
+  }
+
+  function rate(ms){
+    if(ms < 150) return "광속";
+    if(ms < 200) return "초인";
+    if(ms < 260) return "날렵";
+    if(ms < 330) return "보통";
+    if(ms < 420) return "느긋";
+    return "거북이";
+  }
+
+  function startRound(){
+    setState("wait");
+    big.textContent = "기다려…";
+    sub.textContent = "초록을 기다려. 지금 탭하면 실격.";
+    label.textContent = "";
+    const delay = MIN_DELAY + Math.random() * (MAX_DELAY - MIN_DELAY);
+    timer = setTimeout(goGreen, delay);
+  }
+
+  function goGreen(){
+    timer = null;
+    setState("go");
+    big.textContent = "지금!";
+    sub.textContent = "탭!";
+    label.textContent = "";
+    goTime = performance.now();
+  }
+
+  function tooEarly(){
+    if(timer !== null){ clearTimeout(timer); timer = null; }
+    setState("early");
+    big.textContent = "너무 빨라!";
+    sub.textContent = "빨강에서 손이 나갔다. 탭해서 다시.";
+    label.textContent = "";
+  }
+
+  function recordResult(ms){
+    setState("result");
+    lastEl.textContent = ms;
+    let note = "";
+    if(best === null || ms < best){
+      best = ms;
+      localStorage.setItem(BEST_KEY, String(best));
+      bestEl.textContent = best;
+      note = " · 최고 기록!";
+    }
+    big.textContent = ms + " ms";
+    sub.textContent = "다시 탭하면 한 번 더.";
+    label.textContent = rate(ms) + note;
+  }
+
+  function trigger(){
+    switch(state){
+      case "idle":
+      case "result":
+      case "early":
+        startRound();
+        break;
+      case "wait":
+        tooEarly();
+        break;
+      case "go": {
+        const ms = Math.round(performance.now() - goTime);
+        recordResult(ms);
+        break;
+      }
+    }
+  }
+
+  // --- input ------------------------------------------------------------
+  // pointerdown gives the lowest-latency, unified mouse+touch signal.
+  pad.addEventListener("pointerdown", function(e){
+    e.preventDefault();
+    trigger();
+  });
+
+  // space / enter on desktop
+  window.addEventListener("keydown", function(e){
+    if(e.code === "Space" || e.key === " " || e.key === "Enter"){
+      e.preventDefault();
+      trigger();
+    }
+  });
+
+  setState("idle");
+})();
+</script>
+</body>
+</html>

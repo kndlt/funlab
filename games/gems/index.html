@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>보석 맞추기 · Bejeweled</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12;
+    --gap:5px;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 12px;text-align:center;min-width:64px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:1/1;touch-action:none;overflow:hidden}
+  .bg{position:absolute;inset:var(--gap);display:grid;
+    grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);gap:var(--gap)}
+  .bg .slot{background:var(--cell);border-radius:7px}
+  .gems{position:absolute;inset:var(--gap);touch-action:none}
+  .gem{position:absolute;
+    transition:left .17s ease, top .22s ease, transform .15s ease, opacity .18s ease;
+    will-change:left,top,transform;cursor:pointer}
+  .gem.sel{transform:scale(1.13);z-index:3;filter:drop-shadow(0 0 6px rgba(255,226,170,.95))}
+  .gem.clear{transform:scale(.1) rotate(38deg);opacity:0;pointer-events:none}
+  /* gem hue + highlight */
+  .gem{background:
+      radial-gradient(circle at 32% 28%, rgba(255,255,255,.55), transparent 44%),
+      linear-gradient(155deg, var(--c1), var(--c2));
+    box-shadow:inset 0 -2px 4px rgba(0,0,0,.28);}
+  .c0{--c1:#ff8a6a;--c2:#c5331f;clip-path:polygon(50% 3%,97% 50%,50% 97%,3% 50%)}      /* ruby diamond */
+  .c1{--c1:#ffd687;--c2:#e98a1e;border-radius:50%}                                       /* amber circle */
+  .c2{--c1:#bce86f;--c2:#5fa12e;border-radius:24%}                                       /* lime square */
+  .c3{--c1:#7ad9d2;--c2:#2b8f95;clip-path:polygon(25% 4%,75% 4%,98% 50%,75% 96%,25% 96%,2% 50%)} /* teal hex */
+  .c4{--c1:#8fbaff;--c2:#3a63c4;clip-path:polygon(30% 2%,70% 2%,98% 30%,98% 70%,70% 98%,30% 98%,2% 70%,2% 30%)} /* azure octa */
+  .c5{--c1:#d7a0f0;--c2:#8e3fc0;clip-path:polygon(50% 2%,98% 40%,80% 98%,20% 98%,2% 40%)} /* violet pentagon */
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.88);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+  @media (max-width:380px){ :root{ --gap:4px; } }
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">보석 맞추기<span class="ref">인접한 둘을 바꿔 셋 이상을 터뜨린다 · Bejeweled</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">점수</div><div class="val" id="score">0</div></div>
+      <div class="box"><div class="lbl">수</div><div class="val" id="moves">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">두 보석을 탭 / 드래그 · 스와이프</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <div class="bg" id="bg"></div>
+    <div class="gems" id="gems"></div>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">셋이 모이면 터진다. 연쇄로 이어 터질수록 점수가 불어난다. 20수 안에 최대한.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const N = 8;
+  const NCOLORS = 6;
+  const START_MOVES = 20;
+  const BEST_KEY = "funlab:gems:best";
+
+  const SWAP_MS  = 175;   // swap / swap-back slide
+  const CLEAR_MS = 190;   // shrink-out of matched gems
+  const FALL_MS  = 235;   // gravity + refill drop
+  const DRAG_THRESH = 14; // px before a drag counts as a swipe
+
+  const bgEl    = document.getElementById("bg");
+  const gemsEl  = document.getElementById("gems");
+  const scoreEl = document.getElementById("score");
+  const movesEl = document.getElementById("moves");
+  const bestEl  = document.getElementById("best");
+  const overlay = document.getElementById("overlay");
+  const overMsg = document.getElementById("overMsg");
+  const overSmall = document.getElementById("overSmall");
+
+  // background slots for depth
+  for(let i=0;i<N*N;i++){ const s=document.createElement("div"); s.className="slot"; bgEl.appendChild(s); }
+
+  // --- state ------------------------------------------------------------
+  let grid;            // N x N of gem {id,color,el} (full except mid-cascade)
+  let score, best, moves;
+  let busy;            // true while an animation chain runs
+  let over;            // game finished
+  let selected;        // {r,c} or null
+  let newRecord;
+  let uid = 1;
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  const rand = n => Math.floor(Math.random()*n);
+  const sleep = ms => new Promise(res => setTimeout(res, ms));
+  const emptyGrid = () => Array.from({length:N}, () => Array(N).fill(null));
+
+  function makeGem(color){
+    const el = document.createElement("div");
+    el.className = "gem c"+color;
+    el.style.width  = `calc((100% - ${N-1} * var(--gap)) / ${N})`;
+    el.style.height = `calc((100% - ${N-1} * var(--gap)) / ${N})`;
+    return {id:uid++, color, el};
+  }
+
+  function setColor(gem, color){
+    gem.color = color;
+    gem.el.className = "gem c"+color;
+  }
+
+  function setPos(el, r, c){
+    el.style.left = `calc(${c} * (100% + var(--gap)) / ${N})`;
+    el.style.top  = `calc(${r} * (100% + var(--gap)) / ${N})`;
+  }
+
+  function renderPositions(){
+    for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+      const g = grid[r][c];
+      if(g) setPos(g.el, r, c);
+    }
+  }
+
+  // --- board generation (no pre-existing matches) -----------------------
+  function genBoard(){
+    grid = emptyGrid();
+    gemsEl.innerHTML = "";
+    for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+      let color;
+      do { color = rand(NCOLORS); }
+      while(
+        (c>=2 && grid[r][c-1].color===color && grid[r][c-2].color===color) ||
+        (r>=2 && grid[r-1][c].color===color && grid[r-2][c].color===color)
+      );
+      const g = makeGem(color);
+      grid[r][c] = g;
+      gemsEl.appendChild(g.el);
+    }
+    if(!hasMove()) genBoard(); // extremely rare; retry for a playable board
+  }
+
+  // --- match detection --------------------------------------------------
+  function checkAnyMatch(){
+    for(let r=0;r<N;r++){ let c=0; while(c<N){ const col=grid[r][c].color; let cc=c+1; while(cc<N && grid[r][cc].color===col) cc++; if(cc-c>=3) return true; c=cc; } }
+    for(let c=0;c<N;c++){ let r=0; while(r<N){ const col=grid[r][c].color; let rr=r+1; while(rr<N && grid[rr][c].color===col) rr++; if(rr-r>=3) return true; r=rr; } }
+    return false;
+  }
+
+  function findRuns(){
+    const runs = [];
+    for(let r=0;r<N;r++){ let c=0; while(c<N){ const col=grid[r][c].color; let cc=c+1; while(cc<N && grid[r][cc].color===col) cc++;
+      if(cc-c>=3){ const cells=[]; for(let k=c;k<cc;k++) cells.push(r+","+k); runs.push({cells, len:cc-c}); } c=cc; } }
+    for(let c=0;c<N;c++){ let r=0; while(r<N){ const col=grid[r][c].color; let rr=r+1; while(rr<N && grid[rr][c].color===col) rr++;
+      if(rr-r>=3){ const cells=[]; for(let k=r;k<rr;k++) cells.push(k+","+c); runs.push({cells, len:rr-r}); } r=rr; } }
+    return runs;
+  }
+
+  function swapCells(r1,c1,r2,c2){
+    const t = grid[r1][c1]; grid[r1][c1] = grid[r2][c2]; grid[r2][c2] = t;
+  }
+
+  // is there any adjacent swap that produces a match?
+  function hasMove(){
+    for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+      if(c+1<N){ swapCells(r,c,r,c+1); const m=checkAnyMatch(); swapCells(r,c,r,c+1); if(m) return true; }
+      if(r+1<N){ swapCells(r,c,r+1,c); const m=checkAnyMatch(); swapCells(r,c,r+1,c); if(m) return true; }
+    }
+    return false;
+  }
+
+  function reshuffleColors(){
+    do {
+      for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+        let color;
+        do { color = rand(NCOLORS); }
+        while(
+          (c>=2 && grid[r][c-1].color===color && grid[r][c-2].color===color) ||
+          (r>=2 && grid[r-1][c].color===color && grid[r-2][c].color===color)
+        );
+        setColor(grid[r][c], color);
+      }
+    } while(!hasMove());
+  }
+
+  // --- gravity + refill -------------------------------------------------
+  function applyGravityAndRefill(){
+    for(let c=0;c<N;c++){
+      let write = N-1;
+      for(let r=N-1;r>=0;r--){
+        if(grid[r][c]){
+          if(r !== write){ grid[write][c] = grid[r][c]; grid[r][c] = null; }
+          write--;
+        }
+      }
+      const newCount = write + 1;           // empty rows 0..write
+      for(let r=write;r>=0;r--){
+        const g = makeGem(rand(NCOLORS));
+        grid[r][c] = g;
+        setPos(g.el, r - newCount, c);       // start above the board, then fall in
+        gemsEl.appendChild(g.el);
+      }
+    }
+  }
+
+  // --- cascade resolution ----------------------------------------------
+  async function resolveCascades(){
+    let cascade = 0;
+    while(true){
+      const runs = findRuns();
+      if(!runs.length) break;
+      cascade++;
+
+      const matched = new Set();
+      let pts = 0;
+      for(const run of runs){
+        pts += run.len*10 + (run.len-3)*20;   // longer lines score more
+        for(const cell of run.cells) matched.add(cell);
+      }
+      score += pts * cascade;                  // cascades multiply
+      if(score > best){ best = score; newRecord = true; localStorage.setItem(BEST_KEY, String(best)); }
+      updateHUD();
+
+      for(const key of matched){
+        const [r,c] = key.split(",").map(Number);
+        const g = grid[r][c];
+        if(!g) continue;
+        grid[r][c] = null;
+        const el = g.el;
+        el.classList.add("clear");
+        setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); }, CLEAR_MS + 40);
+      }
+      await sleep(CLEAR_MS);
+
+      applyGravityAndRefill();
+      void gemsEl.offsetWidth;                 // commit start positions
+      renderPositions();                       // animate fall
+      await sleep(FALL_MS);
+    }
+  }
+
+  // --- swap attempt -----------------------------------------------------
+  async function attemptSwap(r1,c1,r2,c2){
+    if(busy || over) return;
+    busy = true;
+    clearSel();
+
+    swapCells(r1,c1,r2,c2);
+    renderPositions();
+    await sleep(SWAP_MS);
+
+    if(!checkAnyMatch()){
+      swapCells(r1,c1,r2,c2);                  // no match -> slide back
+      renderPositions();
+      await sleep(SWAP_MS);
+      busy = false;
+      return;
+    }
+
+    moves--;
+    updateHUD();
+    await resolveCascades();
+
+    if(moves > 0 && !hasMove()) reshuffleColors();
+
+    busy = false;
+    if(moves <= 0) endGame();
+  }
+
+  // --- selection / input ------------------------------------------------
+  function setSel(r,c){ selected = {r,c}; grid[r][c].el.classList.add("sel"); }
+  function clearSel(){
+    if(selected){ const g = grid[selected.r][selected.c]; if(g) g.el.classList.remove("sel"); }
+    selected = null;
+  }
+  const adjacent = (r1,c1,r2,c2) => Math.abs(r1-r2) + Math.abs(c1-c2) === 1;
+
+  function tapCell(r,c){
+    if(busy || over) return;
+    if(selected){
+      const {r:sr,c:sc} = selected;
+      if(sr===r && sc===c){ clearSel(); return; }
+      if(adjacent(sr,sc,r,c)){ const a={r:sr,c:sc}; clearSel(); attemptSwap(a.r,a.c,r,c); return; }
+      clearSel(); setSel(r,c); return;
+    }
+    setSel(r,c);
+  }
+
+  function cellAt(clientX, clientY){
+    const rect = gemsEl.getBoundingClientRect();
+    const x = clientX - rect.left, y = clientY - rect.top;
+    if(x < 0 || y < 0 || x > rect.width || y > rect.height) return null;
+    let c = Math.floor(x / (rect.width / N));
+    let r = Math.floor(y / (rect.height / N));
+    if(c<0) c=0; if(c>=N) c=N-1; if(r<0) r=0; if(r>=N) r=N-1;
+    return {r,c};
+  }
+
+  let pd = null; // pointer drag state
+  gemsEl.addEventListener("pointerdown", e=>{
+    if(busy || over) return;
+    const cell = cellAt(e.clientX, e.clientY);
+    if(!cell) return;
+    pd = {cell, x:e.clientX, y:e.clientY, handled:false};
+  });
+  window.addEventListener("pointermove", e=>{
+    if(!pd || pd.handled) return;
+    const dx = e.clientX - pd.x, dy = e.clientY - pd.y;
+    if(Math.hypot(dx,dy) < DRAG_THRESH) return;
+    pd.handled = true;
+    let dr=0, dc=0;
+    if(Math.abs(dx) > Math.abs(dy)) dc = dx>0?1:-1; else dr = dy>0?1:-1;
+    const nr = pd.cell.r + dr, nc = pd.cell.c + dc;
+    if(nr>=0 && nr<N && nc>=0 && nc<N) attemptSwap(pd.cell.r, pd.cell.c, nr, nc);
+  });
+  window.addEventListener("pointerup", e=>{
+    if(!pd) return;
+    if(!pd.handled){
+      const cell = cellAt(e.clientX, e.clientY);
+      if(cell && cell.r===pd.cell.r && cell.c===pd.cell.c) tapCell(cell.r, cell.c);
+    }
+    pd = null;
+  });
+  window.addEventListener("pointercancel", ()=>{ pd = null; });
+
+  // --- hud / lifecycle --------------------------------------------------
+  function updateHUD(){
+    scoreEl.textContent = score;
+    movesEl.textContent = Math.max(0, moves);
+    bestEl.textContent  = best;
+  }
+
+  function endGame(){
+    over = true;
+    overMsg.innerHTML = `수 소진 · 점수 <b>${score}</b>`;
+    overSmall.textContent = (newRecord && score > 0) ? "최고 기록 경신!" : "더 길게, 더 연쇄로. 다시.";
+    overlay.classList.add("show");
+  }
+
+  function init(){
+    score = 0;
+    moves = START_MOVES;
+    busy = false;
+    over = false;
+    selected = null;
+    newRecord = false;
+    overlay.classList.remove("show");
+    genBoard();
+    renderPositions();
+    updateHUD();
+  }
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+})();
+</script>
+</body>
+</html>

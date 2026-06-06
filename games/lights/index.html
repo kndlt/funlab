@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>라이트 아웃 · Lights Out</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12;
+    --gap:12px;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:manipulation; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:1/1}
+  .grid{position:absolute;inset:var(--gap);display:grid;
+    grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(5,1fr);gap:var(--gap)}
+  .lt{border-radius:10px;cursor:pointer;background:var(--cell);
+    border:1px solid rgba(58,48,36,.6);
+    transition:background .18s ease,box-shadow .18s ease,transform .07s ease;
+    will-change:background,box-shadow}
+  .lt:active{transform:scale(.94)}
+  .lt.on{
+    background:radial-gradient(120% 120% at 30% 25%,#ffd79a,#ff9e3d 70%,#f08a2c);
+    border-color:#ffca7a;
+    box-shadow:0 0 14px rgba(255,160,70,.55),inset 0 1px 3px rgba(255,240,210,.6);
+  }
+  .over{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .over.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .over .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .over .msg b{color:var(--amber)}
+  .over .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+  @media (max-width:380px){ :root{ --gap:10px; } }
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">라이트 아웃<span class="ref">누르면 주변까지 토글 — 전부 끈다 · Lights Out</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">moves</div><div class="val" id="moves">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">–</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">불을 눌러 전부 꺼라</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <div class="grid" id="grid"></div>
+    <div class="over" id="over">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">한 칸을 누르면 그 칸과 상하좌우가 함께 뒤집힌다. 모든 불을 끄면 끝.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const N = 5;
+  const BEST_KEY = "funlab:lights:best";
+
+  const gridEl    = document.getElementById("grid");
+  const movesEl   = document.getElementById("moves");
+  const bestEl    = document.getElementById("best");
+  const overEl    = document.getElementById("over");
+  const overMsg   = document.getElementById("overMsg");
+  const overSmall = document.getElementById("overSmall");
+
+  // --- state ------------------------------------------------------------
+  let board;   // N*N array of 0/1 (1 = lit)
+  let cells;   // N*N array of DOM elements
+  let moves;
+  let best;
+  let solved;
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "", 10);
+  if(!Number.isFinite(best) || best <= 0) best = null;
+
+  // build cell elements once
+  for(let i=0;i<N*N;i++){
+    const el = document.createElement("div");
+    el.className = "lt";
+    el.dataset.idx = i;
+    gridEl.appendChild(el);
+  }
+  cells = Array.from(gridEl.children);
+
+  function idx(r,c){ return r*N + c; }
+
+  // toggle a cell + its orthogonal neighbors (mutates board)
+  function press(r,c){
+    board[idx(r,c)] ^= 1;
+    if(r > 0)     board[idx(r-1,c)] ^= 1;
+    if(r < N-1)   board[idx(r+1,c)] ^= 1;
+    if(c > 0)     board[idx(r,c-1)] ^= 1;
+    if(c < N-1)   board[idx(r,c+1)] ^= 1;
+  }
+
+  function isAllOff(){
+    for(let i=0;i<N*N;i++) if(board[i]) return false;
+    return true;
+  }
+
+  function render(){
+    for(let i=0;i<N*N;i++){
+      cells[i].classList.toggle("on", board[i] === 1);
+    }
+    movesEl.textContent = moves;
+    bestEl.textContent = (best == null) ? "–" : best;
+  }
+
+  function scramble(){
+    // guaranteed solvable: start solved (all off), apply random presses.
+    board = new Array(N*N).fill(0);
+    const n = 6 + ((Math.random()*5)|0);   // 6..10 random presses
+    for(let k=0;k<n;k++){
+      press((Math.random()*N)|0, (Math.random()*N)|0);
+    }
+    // avoid handing out an already-solved board
+    if(isAllOff()) press((Math.random()*N)|0, (Math.random()*N)|0);
+  }
+
+  function init(){
+    moves = 0;
+    solved = false;
+    overEl.classList.remove("show");
+    scramble();
+    render();
+  }
+
+  function onPress(i){
+    if(solved) return;
+    const r = (i / N) | 0;
+    const c = i % N;
+    press(r, c);
+    moves += 1;
+    render();
+    if(isAllOff()) win();
+  }
+
+  function win(){
+    solved = true;
+    let record = false;
+    if(best == null || moves < best){
+      best = moves;
+      localStorage.setItem(BEST_KEY, String(best));
+      record = true;
+    }
+    render();
+    overMsg.innerHTML = `전부 껐다 · <b>${moves}</b>수`;
+    overSmall.textContent = record ? "최소 기록 경신!" : `best ${best}수`;
+    overEl.classList.add("show");
+  }
+
+  // --- input ------------------------------------------------------------
+  gridEl.addEventListener("click", e=>{
+    const t = e.target.closest(".lt");
+    if(!t) return;
+    onPress(parseInt(t.dataset.idx, 10));
+  });
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+})();
+</script>
+</body>
+</html>

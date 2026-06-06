@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>미로 · Maze</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:1/1;touch-action:none;overflow:hidden}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .dpad{display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(3,52px);
+    gap:6px;margin:16px auto 0;justify-content:center;touch-action:none}
+  .dpad button{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    color:var(--amber);font-size:22px;font-weight:800;cursor:pointer;font-family:inherit;
+    display:flex;align-items:center;justify-content:center}
+  .dpad button:active{background:#2a2117}
+  .dpad .sp{visibility:hidden}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">미로<span class="ref">길을 찾아 빠져나간다 · Maze</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">이동</div><div class="val" id="moves">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">—</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">방향키 / WASD / 스와이프</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <canvas id="cv"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="dpad" id="dpad">
+    <span class="sp"></span>
+    <button data-dir="up">↑</button>
+    <span class="sp"></span>
+    <button data-dir="left">←</button>
+    <span class="sp"></span>
+    <button data-dir="right">→</button>
+    <span class="sp"></span>
+    <button data-dir="down">↓</button>
+    <span class="sp"></span>
+  </div>
+
+  <div class="foot">한 번에 한 칸. 벽은 못 넘는다. 아래 끝 빛나는 칸이 출구.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const N = 15;                       // grid is N x N cells
+  const BEST_KEY = "funlab:maze:best";
+  const MOVE_MS  = 95;                // ms to slide between cells
+
+  const boardEl  = document.getElementById("board");
+  const cv       = document.getElementById("cv");
+  const ctx      = cv.getContext("2d");
+  const movesEl  = document.getElementById("moves");
+  const bestEl   = document.getElementById("best");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+
+  // wall bit indices per cell: 0=top, 1=right, 2=bottom, 3=left
+  const TOP=0, RIGHT=1, BOTTOM=2, LEFT=3;
+
+  // --- pixel sizing (retina + responsive board) ------------------------
+  let px = 0;        // device pixels per cell
+  function resize(){
+    const rect = boardEl.getBoundingClientRect();
+    const dpr  = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const size = Math.round(rect.width * dpr);
+    cv.width  = size;
+    cv.height = size;
+    px = size / N;
+    render(performance.now());
+  }
+  window.addEventListener("resize", resize);
+
+  // --- state ------------------------------------------------------------
+  let cells;        // array N*N, each {walls:[t,r,b,l], visited:bool}
+  let pos;          // player cell {x,y}
+  let from;         // cell we are sliding from (for animation)
+  let moveStart;    // timestamp when the current slide began
+  let trail;        // Set of "x,y" cells the player has stepped on
+  let moves;        // move count
+  let best;         // fewest moves ever (null if none)
+  let state;        // 'playing' | 'over'
+
+  best = readBest();
+
+  function readBest(){
+    const v = parseInt(localStorage.getItem(BEST_KEY) || "", 10);
+    return Number.isFinite(v) && v > 0 ? v : null;
+  }
+
+  function idx(x,y){ return y*N + x; }
+
+  // --- perfect maze: randomized DFS (recursive backtracker) -------------
+  function generate(){
+    cells = new Array(N*N);
+    for(let i=0;i<N*N;i++) cells[i] = { walls:[true,true,true,true], visited:false };
+
+    const stack = [];
+    let cx = 0, cy = 0;
+    cells[idx(cx,cy)].visited = true;
+    stack.push([cx,cy]);
+
+    while(stack.length){
+      [cx,cy] = stack[stack.length-1];
+      // gather unvisited neighbours
+      const nb = [];
+      if(cy>0   && !cells[idx(cx,cy-1)].visited) nb.push([cx,cy-1,TOP,BOTTOM]);
+      if(cx<N-1 && !cells[idx(cx+1,cy)].visited) nb.push([cx+1,cy,RIGHT,LEFT]);
+      if(cy<N-1 && !cells[idx(cx,cy+1)].visited) nb.push([cx,cy+1,BOTTOM,TOP]);
+      if(cx>0   && !cells[idx(cx-1,cy)].visited) nb.push([cx-1,cy,LEFT,RIGHT]);
+
+      if(!nb.length){ stack.pop(); continue; }
+
+      const [nx,ny,wHere,wThere] = nb[(Math.random()*nb.length)|0];
+      cells[idx(cx,cy)].walls[wHere]  = false;   // open wall between cells
+      cells[idx(nx,ny)].walls[wThere] = false;
+      cells[idx(nx,ny)].visited = true;
+      stack.push([nx,ny]);
+    }
+  }
+
+  function init(){
+    generate();
+    pos  = {x:0, y:0};
+    from = {x:0, y:0};
+    moveStart = -Infinity;             // not animating
+    trail = new Set(["0,0"]);
+    moves = 0;
+    state = "playing";
+    overlay.classList.remove("show");
+    updateScores();
+    resize();
+  }
+
+  function updateScores(){
+    movesEl.textContent = moves;
+    bestEl.textContent  = best == null ? "—" : best;
+  }
+
+  // --- movement ---------------------------------------------------------
+  // dir vector + which wall of the CURRENT cell blocks that move
+  const DIRS = {
+    up:    {dx:0, dy:-1, wall:TOP},
+    right: {dx:1, dy:0,  wall:RIGHT},
+    down:  {dx:0, dy:1,  wall:BOTTOM},
+    left:  {dx:-1,dy:0,  wall:LEFT}
+  };
+
+  function move(name){
+    if(state !== "playing") return;
+    const d = DIRS[name];
+    if(!d) return;
+    const cell = cells[idx(pos.x,pos.y)];
+    if(cell.walls[d.wall]) return;     // wall blocks the move
+
+    const nx = pos.x + d.dx, ny = pos.y + d.dy;
+    if(nx<0||ny<0||nx>=N||ny>=N) return;   // safety; outer walls block anyway
+
+    from = {x:pos.x, y:pos.y};
+    pos  = {x:nx, y:ny};
+    moveStart = performance.now();
+    moves += 1;
+    trail.add(nx+","+ny);
+    movesEl.textContent = moves;
+
+    if(nx === N-1 && ny === N-1) win();
+  }
+
+  function win(){
+    state = "over";
+    const isBest = best == null || moves < best;
+    if(isBest){ best = moves; localStorage.setItem(BEST_KEY, String(best)); }
+    updateScores();
+    overMsg.innerHTML = `탈출 · 이동 <b>${moves}</b>`;
+    overSmall.textContent = isBest ? "최소 이동 기록 경신!" : "출구를 찾았다. 다시?";
+    // let the final slide finish before the overlay
+    setTimeout(()=>overlay.classList.add("show"), 260);
+  }
+
+  // --- rendering --------------------------------------------------------
+  function render(now){
+    const W = cv.width;
+    ctx.clearRect(0,0,W,W);
+
+    // faint visited trail
+    ctx.fillStyle = "rgba(255,177,84,0.08)";
+    trail.forEach(key=>{
+      const [tx,ty] = key.split(",");
+      ctx.fillRect((+tx)*px, (+ty)*px, px, px);
+    });
+
+    // goal cell glow (bottom-right)
+    const gx = (N-1+0.5)*px, gy = (N-1+0.5)*px;
+    const pulse = 0.5 + 0.5*Math.sin(now/360);
+    ctx.save();
+    ctx.shadowColor = "rgba(255,177,84,0.9)";
+    ctx.shadowBlur  = px*(0.8 + 0.6*pulse);
+    const gg = ctx.createRadialGradient(gx,gy, px*0.05, gx,gy, px*0.42);
+    gg.addColorStop(0, "#ffe0ad");
+    gg.addColorStop(1, "rgba(255,138,61,0.35)");
+    ctx.fillStyle = gg;
+    ctx.beginPath();
+    ctx.arc(gx, gy, px*(0.30+0.03*pulse), 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    // walls
+    ctx.strokeStyle = "#5a4a33";
+    ctx.lineWidth = Math.max(1.5, px*0.10);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    for(let y=0;y<N;y++){
+      for(let x=0;x<N;x++){
+        const c = cells[idx(x,y)];
+        const x0 = x*px, y0 = y*px, x1 = x0+px, y1 = y0+px;
+        if(c.walls[TOP]){  ctx.moveTo(x0,y0); ctx.lineTo(x1,y0); }
+        if(c.walls[LEFT]){ ctx.moveTo(x0,y0); ctx.lineTo(x0,y1); }
+        if(x===N-1 && c.walls[RIGHT]){  ctx.moveTo(x1,y0); ctx.lineTo(x1,y1); }
+        if(y===N-1 && c.walls[BOTTOM]){ ctx.moveTo(x0,y1); ctx.lineTo(x1,y1); }
+      }
+    }
+    ctx.stroke();
+
+    // player (amber dot, interpolated between from -> pos)
+    let f = (now - moveStart) / MOVE_MS;
+    if(!(f >= 0)) f = 1;               // not animating / NaN -> settled
+    f = Math.min(1, f);
+    const ease = 1 - Math.pow(1-f, 3);
+    const cxCell = from.x + (pos.x - from.x)*ease;
+    const cyCell = from.y + (pos.y - from.y)*ease;
+    const cx = (cxCell+0.5)*px, cy = (cyCell+0.5)*px;
+    const r  = px*0.30;
+    ctx.save();
+    ctx.shadowColor = "rgba(255,200,121,0.7)";
+    ctx.shadowBlur  = px*0.5;
+    const pg = ctx.createRadialGradient(cx-r*0.3, cy-r*0.3, r*0.1, cx, cy, r);
+    pg.addColorStop(0, "#fff3df");
+    pg.addColorStop(1, "#ff9e3d");
+    ctx.fillStyle = pg;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function frame(now){
+    render(now);
+    requestAnimationFrame(frame);
+  }
+
+  // --- input ------------------------------------------------------------
+  const KEYMAP = {
+    ArrowUp:"up", ArrowDown:"down", ArrowLeft:"left", ArrowRight:"right",
+    w:"up", s:"down", a:"left", d:"right",
+    W:"up", S:"down", A:"left", D:"right",
+    k:"up", j:"down", h:"left", l:"right"
+  };
+  window.addEventListener("keydown", e=>{
+    const m = KEYMAP[e.key];
+    if(m){ e.preventDefault(); move(m); }
+  });
+
+  // touch swipe
+  let tStart = null;
+  boardEl.addEventListener("touchstart", e=>{
+    const t = e.changedTouches[0];
+    tStart = {x:t.clientX, y:t.clientY};
+  }, {passive:true});
+  boardEl.addEventListener("touchend", e=>{
+    if(!tStart) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - tStart.x, dy = t.clientY - tStart.y;
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    tStart = null;
+    if(Math.max(ax,ay) < 18) return;
+    if(ax > ay) move(dx > 0 ? "right" : "left");
+    else        move(dy > 0 ? "down" : "up");
+  }, {passive:true});
+
+  document.getElementById("dpad").addEventListener("click", e=>{
+    const b = e.target.closest("button");
+    if(b && b.dataset.dir) move(b.dataset.dir);
+  });
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

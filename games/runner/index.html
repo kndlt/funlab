@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>점프 러너 · Endless Runner</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:5/3;touch-action:none;overflow:hidden;cursor:pointer}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">점프 러너<span class="ref">장애물을 점프로 넘으며 달린다 · Endless Runner</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">거리</div><div class="val" id="score">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">스페이스 / 클릭 / 탭 — 점프 (공중 2단)</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <canvas id="cv"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">멈추지 않고 달린다. 점점 빨라지고, 한 번 박으면 끝.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const BEST_KEY = "funlab:runner:best";
+
+  const boardEl  = document.getElementById("board");
+  const cv       = document.getElementById("cv");
+  const ctx      = cv.getContext("2d");
+  const scoreEl  = document.getElementById("score");
+  const bestEl   = document.getElementById("best");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+
+  // --- pixel sizing (retina + responsive; we draw in logical px) --------
+  let W = 0, H = 0;            // logical (CSS) px of the board
+  function resize(){
+    const rect = boardEl.getBoundingClientRect();
+    const dpr  = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const newW = rect.width, newH = rect.height;
+    cv.width  = Math.round(newW * dpr);
+    cv.height = Math.round(newH * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // rescale live geometry so a resize mid-run stays consistent
+    if(W && H && runner){
+      const sx = newW / W, sy = newH / H;
+      runner.feet *= sy;            // vertical offset above ground
+      runner.vy   *= sy;
+      for(const o of obstacles){ o.x *= sx; o.w *= sx; o.h *= sy; }
+    }
+    W = newW; H = newH;
+  }
+  window.addEventListener("resize", resize);
+
+  // --- tunables (derived from H/W each frame so they scale) -------------
+  function groundY(){ return H * 0.82; }
+  function gravity(){ return 6.48 * H; }      // px/s^2
+  function jumpV(){   return 2.33 * H; }      // px/s  -> apex ~0.42H, air ~0.72s
+  function runnerW(){ return H * 0.17; }
+  function runnerH(){ return H * 0.21; }
+  function runnerX(){ return W * 0.16; }
+  function baseSpeed(){ return W * 0.95; }    // px/s at start
+  function maxSpeed(){  return W * 2.4; }
+
+  // --- state ------------------------------------------------------------
+  let runner;       // {feet: px above ground, vy, jumps}
+  let obstacles;    // [{x,w,h}]
+  let speed;        // current scroll speed px/s
+  let distance;     // accumulated scroll px (drives score + parallax)
+  let spawnTimer;   // seconds until next obstacle
+  let score, best;
+  let state;        // 'ready' | 'playing' | 'over'
+  let lastTime;
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  function rand(a, b){ return a + Math.random() * (b - a); }
+
+  function init(){
+    resize();
+    runner = { feet: 0, vy: 0, jumps: 0 };
+    obstacles = [];
+    speed = baseSpeed();
+    distance = 0;
+    spawnTimer = 0.9;
+    score = 0;
+    state = "ready";
+    overlay.classList.remove("show");
+    updateScores();
+    lastTime = performance.now();
+  }
+
+  function updateScores(){
+    scoreEl.textContent = score;
+    bestEl.textContent = best;
+  }
+
+  // --- input ------------------------------------------------------------
+  function onInput(){
+    if(state === "over") return;          // overlay button handles restart
+    if(state === "ready"){
+      state = "playing";
+      lastTime = performance.now();
+    }
+    jump();
+  }
+
+  function jump(){
+    if(runner.jumps >= 2) return;         // grounded jump + one air jump
+    // second jump gets a touch less lift so the arc stays readable
+    runner.vy = -jumpV() * (runner.jumps === 0 ? 1 : 0.86);
+    runner.jumps++;
+  }
+
+  // --- spawning ---------------------------------------------------------
+  function spawnObstacle(){
+    const speedRatio = speed / baseSpeed();        // 1 .. ~2.5
+    const w = rand(H * 0.07, H * 0.12);
+    const h = rand(H * 0.14, H * 0.30);
+    obstacles.push({ x: W + w, w, h });
+    // time-based gap, always >= ~0.92s so it stays clearable as speed grows
+    let gap = rand(1.05, 1.95) - (speedRatio - 1) * 0.18;
+    if(gap < 0.92) gap = 0.92;
+    spawnTimer = gap;
+  }
+
+  // --- physics / update -------------------------------------------------
+  function update(dt){
+    // accelerate
+    speed += baseSpeed() * 0.085 * dt;
+    if(speed > maxSpeed()) speed = maxSpeed();
+
+    distance += speed * dt;
+    const newScore = Math.floor(distance / 28);
+    if(newScore !== score){
+      score = newScore;
+      if(score > best){
+        best = score;
+        localStorage.setItem(BEST_KEY, String(best));
+      }
+      updateScores();
+    }
+
+    // runner vertical
+    runner.vy += gravity() * dt;
+    runner.feet -= runner.vy * dt;        // feet is height above ground
+    if(runner.feet <= 0){
+      runner.feet = 0;
+      runner.vy = 0;
+      runner.jumps = 0;
+    }
+
+    // obstacles
+    spawnTimer -= dt;
+    if(spawnTimer <= 0) spawnObstacle();
+    for(const o of obstacles) o.x -= speed * dt;
+    while(obstacles.length && obstacles[0].x + obstacles[0].w < -2) obstacles.shift();
+
+    // collision (AABB with forgiving inset)
+    const rx = runnerX(), rw = runnerW(), rh = runnerH();
+    const rTop = groundY() - runner.feet - rh;
+    const rBot = groundY() - runner.feet;
+    const inx = rw * 0.16, iny = rh * 0.12;
+    for(const o of obstacles){
+      const oTop = groundY() - o.h;
+      if(rx + rw - inx > o.x && rx + inx < o.x + o.w &&
+         rBot - iny > oTop && rTop + iny < groundY()){
+        gameOver();
+        return;
+      }
+    }
+  }
+
+  function gameOver(){
+    state = "over";
+    const isBest = score >= best && score > 0;
+    overMsg.innerHTML = `게임 끝 · 거리 <b>${score}</b> m`;
+    overSmall.textContent = isBest ? "최고 기록 경신!" : "장애물에 박았다. 다시.";
+    overlay.classList.add("show");
+  }
+
+  // --- rendering --------------------------------------------------------
+  function render(now){
+    ctx.clearRect(0, 0, W, H);
+    const gy = groundY();
+
+    // parallax hills (two layers, scroll at fractions of distance)
+    drawHills(distance * 0.18, H * 0.16, gy, "rgba(58,46,30,0.55)", H * 0.34);
+    drawHills(distance * 0.34, H * 0.11, gy, "rgba(74,58,36,0.55)", H * 0.22);
+
+    // ground fill + line
+    ctx.fillStyle = "#191510";
+    ctx.fillRect(0, gy, W, H - gy);
+    ctx.strokeStyle = "rgba(255,178,84,0.55)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, gy + 0.5);
+    ctx.lineTo(W, gy + 0.5);
+    ctx.stroke();
+
+    // scrolling ground ticks
+    const tickGap = W * 0.11;
+    const off = distance % tickGap;
+    ctx.strokeStyle = "rgba(122,109,88,0.5)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for(let x = -off; x < W; x += tickGap){
+      ctx.moveTo(x, gy + 6);
+      ctx.lineTo(x + W * 0.045, gy + 6);
+    }
+    ctx.stroke();
+
+    // obstacles
+    for(const o of obstacles) drawCactus(o, gy);
+
+    // runner
+    drawRunner(now, gy);
+
+    // ready hint
+    if(state === "ready"){
+      const a = 0.45 + 0.35 * Math.sin(now / 320);
+      ctx.fillStyle = `rgba(246,234,216,${a})`;
+      ctx.font = `700 ${Math.round(H*0.075)}px "Apple SD Gothic Neo",system-ui,sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("탭하면 출발", W / 2, H * 0.34);
+    }
+  }
+
+  function drawHills(scroll, amp, gy, color, span){
+    const off = ((scroll % span) + span) % span;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(-span, gy);
+    for(let x = -span - off; x < W + span; x += span){
+      ctx.quadraticCurveTo(x + span * 0.5, gy - amp, x + span, gy);
+    }
+    ctx.lineTo(W + span, gy);
+    ctx.lineTo(-span, gy);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawCactus(o, gy){
+    const x = o.x, w = o.w, h = o.h;
+    const top = gy - h;
+    const r = Math.min(w * 0.4, 6);
+    // body (ember gradient)
+    const g = ctx.createLinearGradient(x, top, x, gy);
+    g.addColorStop(0, "#e8853d");
+    g.addColorStop(1, "#9a4f1f");
+    ctx.fillStyle = g;
+    roundRectTop(x, top, w, h, r);
+    ctx.fill();
+    // a side arm for taller ones -> cactus silhouette
+    if(h > H * 0.20){
+      const armW = w * 0.45, armH = h * 0.32;
+      const ay = top + h * 0.30;
+      ctx.fillStyle = "#c96e2d";
+      roundRectTop(x - armW * 0.7, ay, armW, armH, r * 0.6);
+      ctx.fill();
+      roundRectTop(x + w - armW * 0.3, ay - armH * 0.4, armW, armH * 1.1, r * 0.6);
+      ctx.fill();
+    }
+  }
+
+  function drawRunner(now, gy){
+    const w = runnerW(), h = runnerH();
+    const x = runnerX();
+    const yBot = gy - runner.feet;
+    const yTop = yBot - h;
+    const cx = x + w / 2;
+    const grounded = runner.feet <= 0.5;
+
+    // legs (animated when grounded, tucked in air)
+    ctx.strokeStyle = "#c8842f";
+    ctx.lineWidth = Math.max(2, w * 0.13);
+    ctx.lineCap = "round";
+    const legLen = h * 0.26;
+    if(grounded){
+      const ph = Math.sin(now / 70);
+      drawLeg(x + w * 0.30, yBot, legLen, ph);
+      drawLeg(x + w * 0.70, yBot, legLen, -ph);
+    } else {
+      drawLeg(x + w * 0.32, yBot, legLen * 0.55, 0.8);
+      drawLeg(x + w * 0.68, yBot, legLen * 0.55, 0.8);
+    }
+
+    // body
+    const bodyH = h - legLen * 0.55;
+    const g = ctx.createLinearGradient(x, yTop, x, yTop + bodyH);
+    g.addColorStop(0, "#ffd49a");
+    g.addColorStop(1, "#ff9e3d");
+    ctx.fillStyle = g;
+    roundRect(x, yTop, w, bodyH, w * 0.32);
+    ctx.fill();
+
+    // ear / tuft
+    ctx.fillStyle = "#ffb154";
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.62, yTop + 1);
+    ctx.lineTo(x + w * 0.86, yTop - h * 0.12);
+    ctx.lineTo(x + w * 0.84, yTop + bodyH * 0.18);
+    ctx.closePath();
+    ctx.fill();
+
+    // eye (blinks occasionally; squints in air)
+    const blink = (now % 2600) < 110;
+    ctx.fillStyle = "#3a230a";
+    const eyeX = x + w * 0.66, eyeY = yTop + bodyH * 0.34;
+    if(blink || !grounded){
+      ctx.lineWidth = Math.max(1.5, w * 0.05);
+      ctx.strokeStyle = "#3a230a";
+      ctx.beginPath();
+      ctx.moveTo(eyeX - w * 0.07, eyeY);
+      ctx.lineTo(eyeX + w * 0.07, eyeY);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.arc(eyeX, eyeY, w * 0.075, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function drawLeg(px, footY, len, phase){
+    const swing = len * 0.5 * phase;
+    ctx.beginPath();
+    ctx.moveTo(px, footY - len);
+    ctx.lineTo(px + swing, footY);
+    ctx.stroke();
+  }
+
+  function roundRect(x, y, w, h, r){
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y,     x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x,     y + h, r);
+    ctx.arcTo(x,     y + h, x,     y,     r);
+    ctx.arcTo(x,     y,     x + w, y,     r);
+    ctx.closePath();
+  }
+  // rounded top, square bottom (sits on ground)
+  function roundRectTop(x, y, w, h, r){
+    r = Math.min(r, w / 2, h);
+    ctx.beginPath();
+    ctx.moveTo(x, y + h);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h);
+    ctx.closePath();
+  }
+
+  // --- main loop --------------------------------------------------------
+  function frame(now){
+    let dt = (now - lastTime) / 1000;
+    lastTime = now;
+    if(dt > 0.05) dt = 0.05;              // clamp after tab-switch / jank
+    if(state === "playing") update(dt);
+    render(now);
+    requestAnimationFrame(frame);
+  }
+
+  // --- bindings ---------------------------------------------------------
+  window.addEventListener("keydown", e=>{
+    if(e.code === "Space" || e.code === "ArrowUp" || e.key === "w" || e.key === "W"){
+      e.preventDefault();
+      onInput();
+    }
+  });
+  boardEl.addEventListener("pointerdown", e=>{
+    e.preventDefault();
+    onInput();
+  });
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

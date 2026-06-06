@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>두더지 · Whack-a-Mole</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:manipulation; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 12px;text-align:center;min-width:60px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .box .val.warn{color:#ff7a59}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:1/1;overflow:hidden;padding:14px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+    gap:12px;width:100%;height:100%}
+  .hole{position:relative;border-radius:50%;overflow:hidden;cursor:pointer;
+    background:
+      radial-gradient(120% 90% at 50% 18%, #0d0b08 0%, #0d0b08 38%, transparent 39%),
+      linear-gradient(#2c2418,#241c12);
+    border:1px solid var(--line)}
+  /* the dark pit the mole climbs out of */
+  .hole::after{content:"";position:absolute;left:14%;right:14%;bottom:6%;height:46%;
+    background:radial-gradient(100% 100% at 50% 100%, #070603 0%, #0d0b08 70%, transparent 100%);
+    border-radius:0 0 50% 50%}
+  .mole{position:absolute;left:8%;right:8%;bottom:4%;height:80%;
+    display:flex;align-items:flex-end;justify-content:center;
+    font-size:42px;line-height:1;
+    transform:translateY(115%);transition:transform .11s cubic-bezier(.34,1.56,.64,1);
+    will-change:transform;z-index:2;pointer-events:none}
+  .mole.up{transform:translateY(8%)}
+  .mole.hit{transform:translateY(70%) scale(.55);transition:transform .12s ease-in}
+  .mole .face{filter:drop-shadow(0 4px 6px rgba(0,0,0,.5))}
+  .pop{position:absolute;left:50%;top:30%;transform:translate(-50%,-50%);
+    font-size:16px;font-weight:800;pointer-events:none;opacity:0;z-index:3;
+    color:var(--amber);text-shadow:0 2px 4px rgba(0,0,0,.6)}
+  .pop.bad{color:#ff7a59}
+  .pop.show{animation:popup .55s ease-out forwards}
+  @keyframes popup{
+    0%{opacity:0;transform:translate(-50%,-30%) scale(.7)}
+    25%{opacity:1}
+    100%{opacity:0;transform:translate(-50%,-150%) scale(1.1)}
+  }
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">두더지<span class="ref">튀어나오는 걸 빠르게 때린다 · Whack-a-Mole</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">점수</div><div class="val" id="score">0</div></div>
+      <div class="box"><div class="lbl">시간</div><div class="val" id="time">30</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">튀어나오면 때려 · 폭탄은 피해</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <div class="grid" id="grid"></div>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">시간이 갈수록 더 빨리 숨는다. 폭탄을 때리면 점수가 깎인다.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const HOLES     = 9;                 // 3x3
+  const ROUND_MS  = 30000;             // round length
+  const BEST_KEY  = "funlab:whack:best";
+  const SPAWN_MIN = 380;               // shortest gap between spawns (round end)
+  const SPAWN_MAX = 820;               // longest gap (round start)
+  const UP_MIN    = 480;               // shortest a mole stays up (round end)
+  const UP_MAX    = 1050;              // longest a mole stays up (round start)
+  const BAD_CHANCE= 0.18;              // probability a spawn is a bomb
+
+  const gridEl   = document.getElementById("grid");
+  const boardEl  = document.getElementById("board");
+  const scoreEl  = document.getElementById("score");
+  const timeEl   = document.getElementById("time");
+  const bestEl   = document.getElementById("best");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+
+  // --- build holes ------------------------------------------------------
+  // Each hole owns its DOM + a small bit of runtime state.
+  const holes = [];
+  for(let i=0;i<HOLES;i++){
+    const hole = document.createElement("div");
+    hole.className = "hole";
+    const mole = document.createElement("div");
+    mole.className = "mole";
+    const face = document.createElement("span");
+    face.className = "face";
+    mole.appendChild(face);
+    hole.appendChild(mole);
+    gridEl.appendChild(hole);
+    const h = { el:hole, mole, face, active:false, bad:false, downAt:0, timer:0 };
+    hole.addEventListener("pointerdown", e=>{ e.preventDefault(); whack(h); });
+    holes.push(h);
+  }
+
+  // --- audio (optional WebAudio blips, no asset files) ------------------
+  let actx = null;
+  function blip(freq, dur, type, gain){
+    try{
+      if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+      const o = actx.createOscillator();
+      const g = actx.createGain();
+      o.type = type || "square";
+      o.frequency.value = freq;
+      g.gain.value = gain == null ? 0.06 : gain;
+      o.connect(g); g.connect(actx.destination);
+      const t = actx.currentTime;
+      g.gain.setValueAtTime(g.gain.value, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.start(t); o.stop(t + dur);
+    }catch(_){}
+  }
+
+  // --- state ------------------------------------------------------------
+  let score, best, state;              // state: 'ready' | 'playing' | 'over'
+  let roundEnd;                        // performance.now() when round ends
+  let spawnTimer = 0, rafId = 0;
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  // progress 0 (start) -> 1 (end), drives difficulty ramp
+  function progress(){
+    if(state !== "playing") return 0;
+    const left = roundEnd - performance.now();
+    return Math.min(1, Math.max(0, 1 - left / ROUND_MS));
+  }
+  function lerp(a,b,t){ return a + (b-a)*t; }
+
+  function updateScores(){
+    scoreEl.textContent = score;
+    bestEl.textContent = best;
+  }
+
+  function setTime(){
+    if(state !== "playing"){ return; }
+    const left = Math.max(0, roundEnd - performance.now());
+    const secs = Math.ceil(left/1000);
+    timeEl.textContent = secs;
+    timeEl.classList.toggle("warn", secs <= 5);
+  }
+
+  // --- mole lifecycle ---------------------------------------------------
+  function freeHoles(){ return holes.filter(h => !h.active); }
+
+  function spawn(){
+    const free = freeHoles();
+    if(!free.length) return;
+    const h = free[(Math.random()*free.length)|0];
+    h.active = true;
+    h.bad = Math.random() < BAD_CHANCE;
+    h.face.textContent = h.bad ? "💣" : "🐹";
+    h.mole.classList.remove("hit");
+    // force reflow so re-adding 'up' always animates from down
+    void h.mole.offsetWidth;
+    h.mole.classList.add("up");
+    const upTime = lerp(UP_MAX, UP_MIN, progress());
+    h.downAt = performance.now() + upTime;
+  }
+
+  function retract(h){
+    h.active = false;
+    h.bad = false;
+    h.mole.classList.remove("up");
+  }
+
+  function whack(h){
+    if(state !== "playing" || !h.active) return;
+    const bad = h.bad;
+    h.active = false;            // lock immediately so it scores once
+    h.mole.classList.remove("up");
+    h.mole.classList.add("hit");
+    if(bad){
+      score = Math.max(0, score - 2);
+      popText(h, "-2", true);
+      blip(140, 0.22, "sawtooth", 0.09);
+    } else {
+      score += 1;
+      popText(h, "+1", false);
+      blip(660, 0.10, "square", 0.07);
+      blip(990, 0.08, "square", 0.05);
+    }
+    if(score > best){ best = score; localStorage.setItem(BEST_KEY, String(best)); }
+    updateScores();
+  }
+
+  function popText(h, txt, bad){
+    const p = document.createElement("div");
+    p.className = "pop" + (bad ? " bad" : "");
+    p.textContent = txt;
+    h.el.appendChild(p);
+    void p.offsetWidth;
+    p.classList.add("show");
+    setTimeout(()=>{ if(p.parentNode) p.parentNode.removeChild(p); }, 600);
+  }
+
+  // --- loop -------------------------------------------------------------
+  function frame(now){
+    if(state === "playing"){
+      setTime();
+
+      // retract any moles whose window has passed
+      for(const h of holes){
+        if(h.active && now >= h.downAt) retract(h);
+      }
+
+      // spawn on a difficulty-scaled cadence
+      if(now >= spawnTimer){
+        spawn();
+        const gap = lerp(SPAWN_MAX, SPAWN_MIN, progress());
+        // small jitter so the rhythm doesn't feel mechanical
+        spawnTimer = now + gap * (0.7 + Math.random()*0.6);
+      }
+
+      if(now >= roundEnd){ endRound(); }
+    }
+    rafId = requestAnimationFrame(frame);
+  }
+
+  function endRound(){
+    state = "over";
+    timeEl.textContent = "0";
+    timeEl.classList.remove("warn");
+    for(const h of holes) retract(h);
+    const beat = score >= best && score > 0;
+    overMsg.innerHTML = `시간 끝 · 점수 <b>${score}</b>`;
+    overSmall.textContent = beat ? "최고 기록 경신!" : "더 빠르게. 다시.";
+    overlay.classList.add("show");
+  }
+
+  function init(){
+    score = 0;
+    state = "playing";
+    roundEnd = performance.now() + ROUND_MS;
+    spawnTimer = performance.now() + 300;
+    for(const h of holes) retract(h);
+    timeEl.classList.remove("warn");
+    timeEl.textContent = Math.ceil(ROUND_MS/1000);
+    overlay.classList.remove("show");
+    updateScores();
+  }
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+  rafId = requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

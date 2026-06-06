@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>사이먼 · Simon</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:1/1;touch-action:none;overflow:hidden}
+  .board.shake{animation:shake .45s ease}
+  @keyframes shake{
+    10%,90%{transform:translateX(-2px)} 20%,80%{transform:translateX(3px)}
+    30%,50%,70%{transform:translateX(-5px)} 40%,60%{transform:translateX(5px)}
+  }
+
+  .pads{position:absolute;inset:16px;display:grid;
+    grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:14px}
+  .pad{position:relative;cursor:pointer;background:var(--dim);
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.28), inset 0 0 22px rgba(0,0,0,.32);
+    transition:background .07s ease, box-shadow .07s ease, filter .07s ease;
+    touch-action:none}
+  .pad.lit{background:var(--lit);filter:saturate(1.1);
+    box-shadow:0 0 26px var(--lit), inset 0 0 22px rgba(255,255,255,.4)}
+  .p0{--dim:#6e4a1c;--lit:#ffb154;border-radius:100% 14px 14px 14px}
+  .p1{--dim:#6e2a18;--lit:#f5673a;border-radius:14px 100% 14px 14px}
+  .p2{--dim:#6a591a;--lit:#f4d65c;border-radius:14px 14px 14px 100%}
+  .p3{--dim:#6b2438;--lit:#ec5a86;border-radius:14px 14px 100% 14px}
+
+  .hub{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:33%;aspect-ratio:1/1;border-radius:50%;background:var(--panel);
+    border:1px solid var(--line);box-shadow:0 0 0 7px var(--bg);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    pointer-events:none;z-index:3}
+  .hub .hround{font-size:30px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums;line-height:1}
+  .hub .hstat{font-size:10.5px;color:var(--muted);letter-spacing:.6px}
+
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.88);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">사이먼<span class="ref">점점 길어지는 빛 순서를 기억해 따라친다 · Simon</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">라운드</div><div class="val" id="round">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint" id="hint">탭 / 1·2·3·4 / Q·W·A·S</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <div class="pads">
+      <div class="pad p0" data-i="0"></div>
+      <div class="pad p1" data-i="1"></div>
+      <div class="pad p2" data-i="2"></div>
+      <div class="pad p3" data-i="3"></div>
+    </div>
+    <div class="hub"><div class="hround" id="hround">♪</div><div class="hstat" id="hstat">준비</div></div>
+    <div class="overlay show" id="overlay">
+      <div class="msg" id="overMsg">준비됐어?</div>
+      <div class="small" id="overSmall">빛이 말한 순서 그대로 되돌려줘. 한 번 틀리면 끝.</div>
+      <button class="restart" id="overBtn">시작</button>
+    </div>
+  </div>
+
+  <div class="foot">잘 봐. 매 라운드 빛이 하나씩 늘어난다. 끝까지 따라치면 다음 라운드.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const BEST_KEY = "funlab:simon:best";
+  const FREQ = [392.00, 329.63, 261.63, 220.00]; // pad 0..3 tones (G4 E4 C4 A3)
+
+  const boardEl  = document.getElementById("board");
+  const pads     = Array.prototype.slice.call(document.querySelectorAll(".pad"));
+  const roundEl  = document.getElementById("round");
+  const bestEl   = document.getElementById("best");
+  const hintEl   = document.getElementById("hint");
+  const hroundEl = document.getElementById("hround");
+  const hstatEl  = document.getElementById("hstat");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+  const overBtn  = document.getElementById("overBtn");
+
+  // --- state ------------------------------------------------------------
+  let seq;          // array of pad indices
+  let inputIdx;     // position within the player's replay
+  let round;        // current round number (= seq.length while playing)
+  let best;         // highest round survived
+  let newBest;      // beat the record this game?
+  let state;        // 'ready' | 'cpu' | 'user' | 'over'
+  let token = 0;    // bumped on (re)start to cancel stale timers/playback
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+  bestEl.textContent = best;
+
+  // --- audio ------------------------------------------------------------
+  let actx = null;
+  function ensureAudio(){
+    if(!actx){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(AC) actx = new AC();
+    }
+    if(actx && actx.state === "suspended") actx.resume();
+  }
+  function tone(freq, ms){
+    if(!actx) return;
+    const t0 = actx.currentTime;
+    const dur = ms/1000;
+    const osc = actx.createOscillator();
+    const g = actx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(0.22, t0 + 0.015);
+    g.gain.setValueAtTime(0.22, t0 + Math.max(0.05, dur - 0.06));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g).connect(actx.destination);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  }
+  function buzz(){
+    if(!actx) return;
+    const t0 = actx.currentTime;
+    const osc = actx.createOscillator();
+    const g = actx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(160, t0);
+    osc.frequency.exponentialRampToValueAtTime(70, t0 + 0.45);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(0.25, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.5);
+    osc.connect(g).connect(actx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.52);
+  }
+
+  // --- helpers ----------------------------------------------------------
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  function flashDur(r){ return Math.max(230, 460 - r*14); }
+  function gapDur(r){ return Math.max(90, 190 - r*7); }
+
+  function activate(i, ms){
+    const pad = pads[i];
+    pad.classList.add("lit");
+    tone(FREQ[i], Math.max(160, ms - 40));
+    setTimeout(() => pad.classList.remove("lit"), ms);
+  }
+
+  function setStatus(label){
+    hstatEl.textContent = label;
+    hintEl.textContent = state === "user"
+      ? "네 차례 — 탭 / 1·2·3·4 / Q·W·A·S"
+      : (state === "cpu" ? "잘 봐" : "탭 / 1·2·3·4 / Q·W·A·S");
+  }
+
+  function updateScores(){
+    roundEl.textContent = round;
+    bestEl.textContent = best;
+    hroundEl.textContent = round > 0 ? round : "♪";
+  }
+
+  // --- flow -------------------------------------------------------------
+  function startGame(){
+    ensureAudio();
+    token++;
+    seq = [];
+    inputIdx = 0;
+    round = 0;
+    newBest = false;
+    state = "cpu";
+    overlay.classList.remove("show");
+    boardEl.classList.remove("shake");
+    pads.forEach(p => p.classList.remove("lit"));
+    updateScores();
+    nextRound();
+  }
+
+  function nextRound(){
+    seq.push((Math.random()*4)|0);
+    round = seq.length;
+    inputIdx = 0;
+    updateScores();
+    playback();
+  }
+
+  async function playback(){
+    const tk = token;
+    state = "cpu";
+    setStatus("잘 봐");
+    await sleep(560);
+    if(tk !== token) return;
+    const dur = flashDur(round);
+    const gap = gapDur(round);
+    for(let k=0;k<seq.length;k++){
+      if(tk !== token) return;
+      activate(seq[k], dur);
+      await sleep(dur + gap);
+    }
+    if(tk !== token) return;
+    state = "user";
+    inputIdx = 0;
+    setStatus("따라쳐");
+  }
+
+  function press(i){
+    if(state !== "user") return;
+    activate(i, 220);
+
+    if(i === seq[inputIdx]){
+      inputIdx++;
+      if(inputIdx === seq.length){
+        // whole sequence repeated -> round survived
+        state = "cpu";
+        if(round > best){
+          best = round;
+          newBest = true;
+          localStorage.setItem(BEST_KEY, String(best));
+        }
+        updateScores();
+        setStatus("잘 봤어");
+        const tk = token;
+        setTimeout(() => { if(tk === token && state === "cpu") nextRound(); }, 680);
+      }
+    } else {
+      fail();
+    }
+  }
+
+  function fail(){
+    state = "over";
+    token++; // cancel any pending timers
+    buzz();
+    if(navigator.vibrate) navigator.vibrate(140);
+    // flash every pad, then shake
+    pads.forEach(p => p.classList.add("lit"));
+    setTimeout(() => pads.forEach(p => p.classList.remove("lit")), 320);
+    boardEl.classList.remove("shake");
+    void boardEl.offsetWidth; // restart anim
+    boardEl.classList.add("shake");
+    hstatEl.textContent = "끝";
+    hintEl.textContent = "탭 / 1·2·3·4 / Q·W·A·S";
+    setTimeout(showOver, 560);
+  }
+
+  function showOver(){
+    overMsg.innerHTML = `라운드 <b>${round}</b>에서 끝`;
+    overSmall.textContent = newBest
+      ? "최고 기록 경신!"
+      : "빛은 거짓말 안 한다. 다시.";
+    overBtn.textContent = "다시";
+    overlay.classList.add("show");
+  }
+
+  // --- input ------------------------------------------------------------
+  pads.forEach(pad => {
+    pad.addEventListener("pointerdown", e => {
+      e.preventDefault();
+      ensureAudio();
+      press(parseInt(pad.dataset.i, 10));
+    });
+  });
+
+  const KEYMAP = {
+    "1":0,"2":1,"3":2,"4":3,
+    q:0,w:1,a:2,s:3, Q:0,W:1,A:2,S:3
+  };
+  window.addEventListener("keydown", e => {
+    if((state === "ready" || state === "over") && (e.key === "Enter" || e.key === " ")){
+      e.preventDefault();
+      startGame();
+      return;
+    }
+    const m = KEYMAP[e.key];
+    if(m !== undefined){
+      e.preventDefault();
+      ensureAudio();
+      press(m);
+    }
+  });
+
+  overBtn.addEventListener("click", startGame);
+  document.getElementById("restart").addEventListener("click", startGame);
+
+  // --- boot: ready screen ----------------------------------------------
+  state = "ready";
+  seq = [];
+  round = 0;
+  inputIdx = 0;
+  newBest = false;
+  updateScores();
+})();
+</script>
+</body>
+</html>

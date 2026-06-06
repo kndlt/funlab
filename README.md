@@ -55,6 +55,19 @@ This first batch is biased toward **power / possession / discovery** nerves (the
 | 점점 강해짐 | 숫자가 오르고, 더 빨리 오르게 하는 걸 산다 | accumulation ⊗ growth |
 | 조합 발견 | 둘을 합쳐 새로운 걸 발견하고, 다 모은다 | discovery ⊗ collection |
 
+## Batch 2 — broadening the nerve space
+
+Reflex, memory, flow, raw skill, and pure puzzles — nerves batch 1 barely touched:
+
+| game | essence (one line) | nerve |
+|---|---|---|
+| 사이먼 / 짝맞추기 | 순서를·짝을 **기억**한다 | memory ⊗ sequence / pairs |
+| 반응속도 / 두더지 | 초록인 **순간** 친다 / 튀어나오면 친다 | reflex ⊗ speed / aim |
+| 플래피 / 점프 러너 | 흐름을 타고 틈을 통과·점프 | flow ⊗ nerve / timing |
+| 벽돌깨기 / 타자 | 패들로 깬다 / 빠르고 정확하게 친다 | skill ⊗ aim / speed |
+| 슬라이드·라이트아웃·미로 | 순서·논리·길을 **푼다** | puzzle (order / logic / spatial) |
+| 보석 맞추기 | 셋을 맞춰 **연쇄**로 터뜨린다 | mastery ⊗ cascade |
+
 More batches to come — each adds a few essences across the nerve space.
 
 ## License

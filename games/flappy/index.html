@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>플래피 · Flappy Bird</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:3/4;touch-action:none;overflow:hidden;cursor:pointer}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">플래피<span class="ref">탭으로 떠서 틈을 통과한다 · Flappy Bird</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">점수</div><div class="val" id="score">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">탭 / 클릭 / 스페이스로 날갯짓</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <canvas id="cv"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">떨어지는 새를 톡톡 띄워 기둥 틈으로. 한 번 박으면 끝.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const BEST_KEY = "funlab:flappy:best";
+
+  // --- world units (logical coords; we render at 0..W x 0..H) -----------
+  // The board aspect is 3:4, so logical height is taller than width.
+  const W = 300, H = 400;            // logical play field
+  const GRAVITY   = 1300;            // px/s^2
+  const FLAP_VY   = -380;            // px/s impulse on flap
+  const MAX_VY    = 620;             // terminal-ish fall speed
+  const BIRD_X    = 92;              // bird's fixed horizontal position
+  const BIRD_R    = 13;              // bird radius
+  const PIPE_W    = 52;
+  const GAP_BASE  = 138;             // gap height at start
+  const GAP_MIN   = 108;             // smallest gap as it speeds up
+  const SPEED_BASE= 132;             // px/s scroll at start
+  const SPEED_MAX = 210;
+  const SPAWN_GAP = 178;             // horizontal distance between pipes
+  const MARGIN    = 46;              // min distance of gap from top/bottom
+
+  const boardEl  = document.getElementById("board");
+  const cv       = document.getElementById("cv");
+  const ctx      = cv.getContext("2d");
+  const scoreEl  = document.getElementById("score");
+  const bestEl   = document.getElementById("best");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+
+  // --- pixel sizing (retina + responsive) -------------------------------
+  let scale = 1;     // device px per logical px
+  function resize(){
+    const rect = boardEl.getBoundingClientRect();
+    const dpr  = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    cv.width  = Math.round(rect.width * dpr);
+    cv.height = Math.round(rect.height * dpr);
+    // map logical W x H onto the canvas; W/H ratio matches 3/4 so no distortion
+    scale = cv.width / W;
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  }
+  window.addEventListener("resize", resize);
+
+  // --- state ------------------------------------------------------------
+  let birdY, birdVY, rot;
+  let pipes;          // array of {x, gapY, scored}
+  let score, best;
+  let state;          // 'ready' | 'playing' | 'over'
+  let lastT;
+  let flapAnim;       // 0..1 visual wing flap timer
+  let dist;           // distance scrolled (for spawning)
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  function speedFor(s){ return Math.min(SPEED_MAX, SPEED_BASE + s * 4.2); }
+  function gapFor(s){ return Math.max(GAP_MIN, GAP_BASE - s * 2.0); }
+
+  function init(){
+    resize();
+    birdY  = H * 0.42;
+    birdVY = 0;
+    rot    = 0;
+    flapAnim = 0;
+    score  = 0;
+    dist   = 0;
+    state  = "ready";
+    pipes  = [];
+    // seed pipes so the field isn't empty when play begins
+    spawnPipe(W + 60);
+    spawnPipe(W + 60 + SPAWN_GAP);
+    spawnPipe(W + 60 + SPAWN_GAP*2);
+    overlay.classList.remove("show");
+    updateScores();
+    lastT = performance.now();
+  }
+
+  function spawnPipe(x){
+    const gap = gapFor(score);
+    const gapY = MARGIN + gap/2 + Math.random() * (H - 2*MARGIN - gap);
+    pipes.push({ x, gapY, gap, scored:false });
+  }
+
+  function updateScores(){
+    scoreEl.textContent = score;
+    bestEl.textContent = best;
+  }
+
+  function flap(){
+    if(state === "over") return;
+    if(state === "ready"){
+      state = "playing";
+      lastT = performance.now();
+    }
+    birdVY = FLAP_VY;
+    flapAnim = 1;
+  }
+
+  // --- physics + logic --------------------------------------------------
+  function update(dt){
+    // clamp dt so a tab-switch / long frame can't tunnel the bird
+    dt = Math.min(dt, 0.032);
+
+    if(flapAnim > 0) flapAnim = Math.max(0, flapAnim - dt*5);
+
+    if(state === "ready"){
+      // gentle idle bob before the first flap
+      birdY = H*0.42 + Math.sin(performance.now()/300) * 6;
+      return;
+    }
+    if(state !== "playing") return;
+
+    birdVY += GRAVITY * dt;
+    if(birdVY > MAX_VY) birdVY = MAX_VY;
+    birdY += birdVY * dt;
+
+    // rotation follows velocity for feel
+    const target = Math.max(-0.5, Math.min(1.35, birdVY/520));
+    rot += (target - rot) * Math.min(1, dt*10);
+
+    const speed = speedFor(score);
+    const ddist = speed * dt;
+    dist += ddist;
+    for(const p of pipes) p.x -= ddist;
+
+    // recycle + spawn
+    while(pipes.length && pipes[0].x + PIPE_W < -10) pipes.shift();
+    const lastX = pipes.length ? pipes[pipes.length-1].x : 0;
+    if(lastX < W - SPAWN_GAP + PIPE_W) spawnPipe(lastX + SPAWN_GAP);
+
+    // scoring: pipe fully passed the bird
+    for(const p of pipes){
+      if(!p.scored && p.x + PIPE_W < BIRD_X - BIRD_R){
+        p.scored = true;
+        score += 1;
+        if(score > best){ best = score; localStorage.setItem(BEST_KEY, String(best)); }
+        updateScores();
+      }
+    }
+
+    // ceiling / floor
+    if(birdY - BIRD_R <= 0){ birdY = BIRD_R; gameOver(); return; }
+    if(birdY + BIRD_R >= H){ birdY = H - BIRD_R; gameOver(); return; }
+
+    // pipe collision (circle vs the two rects)
+    for(const p of pipes){
+      if(BIRD_X + BIRD_R < p.x || BIRD_X - BIRD_R > p.x + PIPE_W) continue;
+      const topH = p.gapY - p.gap/2;
+      const botY = p.gapY + p.gap/2;
+      if(circleRectHit(BIRD_X, birdY, BIRD_R, p.x, 0, PIPE_W, topH) ||
+         circleRectHit(BIRD_X, birdY, BIRD_R, p.x, botY, PIPE_W, H - botY)){
+        gameOver(); return;
+      }
+    }
+  }
+
+  function circleRectHit(cx, cy, r, rx, ry, rw, rh){
+    const nx = Math.max(rx, Math.min(cx, rx+rw));
+    const ny = Math.max(ry, Math.min(cy, ry+rh));
+    const dx = cx-nx, dy = cy-ny;
+    return dx*dx + dy*dy <= r*r;
+  }
+
+  function gameOver(){
+    if(state === "over") return;
+    state = "over";
+    overMsg.innerHTML = `게임 끝 · 점수 <b>${score}</b>`;
+    overSmall.textContent = (score >= best && score > 0)
+      ? "최고 기록 경신!" : "기둥은 봐주지 않는다. 다시.";
+    overlay.classList.add("show");
+  }
+
+  // --- rendering --------------------------------------------------------
+  function render(){
+    ctx.clearRect(0,0,W,H);
+
+    // pipes
+    for(const p of pipes){
+      const topH = p.gapY - p.gap/2;
+      const botY = p.gapY + p.gap/2;
+      drawPipe(p.x, 0, PIPE_W, topH, true);
+      drawPipe(p.x, botY, PIPE_W, H - botY, false);
+    }
+
+    // bird
+    ctx.save();
+    ctx.translate(BIRD_X, birdY);
+    ctx.rotate(rot);
+
+    // body glow
+    ctx.shadowColor = "rgba(255,177,84,0.7)";
+    ctx.shadowBlur = 10;
+    const g = ctx.createRadialGradient(-BIRD_R*0.3, -BIRD_R*0.3, BIRD_R*0.2, 0, 0, BIRD_R);
+    g.addColorStop(0, "#ffe0ad");
+    g.addColorStop(1, "#ff9e3d");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, BIRD_R, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // wing (flaps when flapAnim high)
+    const wingUp = flapAnim;
+    ctx.fillStyle = "#e8732a";
+    ctx.beginPath();
+    ctx.ellipse(-BIRD_R*0.2, BIRD_R*0.15 - wingUp*BIRD_R*0.55, BIRD_R*0.62, BIRD_R*0.40,
+                -0.5 - wingUp*0.6, 0, Math.PI*2);
+    ctx.fill();
+
+    // beak
+    ctx.fillStyle = "#ffcf6b";
+    ctx.beginPath();
+    ctx.moveTo(BIRD_R*0.7, -2);
+    ctx.lineTo(BIRD_R*1.5, 1);
+    ctx.lineTo(BIRD_R*0.7, 4);
+    ctx.closePath();
+    ctx.fill();
+
+    // eye
+    ctx.fillStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(BIRD_R*0.42, -BIRD_R*0.34, BIRD_R*0.30, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = "#2a1c0a";
+    ctx.beginPath();
+    ctx.arc(BIRD_R*0.50, -BIRD_R*0.34, BIRD_R*0.14, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.restore();
+
+    // score floating on field while playing
+    if(state === "playing" || state === "ready"){
+      ctx.fillStyle = "rgba(246,234,216,0.92)";
+      ctx.font = "800 38px 'Apple SD Gothic Neo', system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(score), W/2, 52);
+    }
+
+    if(state === "ready"){
+      ctx.fillStyle = "rgba(169,151,126,0.95)";
+      ctx.font = "600 15px 'Apple SD Gothic Neo', system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("탭해서 시작", W/2, H*0.62);
+    }
+  }
+
+  function drawPipe(x, y, w, h, isTop){
+    const grad = ctx.createLinearGradient(x, 0, x+w, 0);
+    grad.addColorStop(0, "#c87b2e");
+    grad.addColorStop(0.5, "#ffb154");
+    grad.addColorStop(1, "#b86c24");
+    ctx.fillStyle = grad;
+    roundRect(ctx, x, y, w, h, 4);
+    ctx.fill();
+    // lip at the gap-facing end
+    const lipH = 14, lipOver = 5;
+    const ly = isTop ? (y + h - lipH) : y;
+    ctx.fillStyle = "#ffc266";
+    roundRect(ctx, x - lipOver, ly, w + lipOver*2, lipH, 4);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(58,35,10,0.35)";
+    ctx.lineWidth = 1;
+    roundRect(ctx, x - lipOver, ly, w + lipOver*2, lipH, 4);
+    ctx.stroke();
+  }
+
+  function roundRect(c, x, y, w, h, r){
+    r = Math.min(r, w/2, h/2);
+    if(r < 0) r = 0;
+    c.beginPath();
+    c.moveTo(x+r, y);
+    c.arcTo(x+w, y,   x+w, y+h, r);
+    c.arcTo(x+w, y+h, x,   y+h, r);
+    c.arcTo(x,   y+h, x,   y,   r);
+    c.arcTo(x,   y,   x+w, y,   r);
+    c.closePath();
+  }
+
+  // --- main loop --------------------------------------------------------
+  function frame(now){
+    const dt = (now - lastT) / 1000;
+    lastT = now;
+    update(dt);
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  // --- input ------------------------------------------------------------
+  function onFlapInput(e){
+    if(e) e.preventDefault();
+    flap();
+  }
+  // pointer for both mouse + touch (no double-fire)
+  boardEl.addEventListener("pointerdown", onFlapInput);
+  window.addEventListener("keydown", e=>{
+    if(e.code === "Space" || e.key === " " || e.key === "ArrowUp" || e.key === "w" || e.key === "W"){
+      e.preventDefault();
+      flap();
+    }
+  });
+
+  document.getElementById("restart").addEventListener("click", e=>{ e.stopPropagation(); init(); });
+  document.getElementById("overRestart").addEventListener("click", e=>{ e.stopPropagation(); init(); });
+
+  init();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

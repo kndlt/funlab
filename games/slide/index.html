@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>슬라이드 퍼즐 · 15-Puzzle</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12;
+    --gap:12px;
+  }
+  @media (max-width:380px){ :root{ --gap:10px; } }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:1/1;touch-action:none}
+  .bg{position:absolute;inset:var(--gap);display:grid;grid-template-columns:repeat(4,1fr);
+    grid-template-rows:repeat(4,1fr);gap:var(--gap)}
+  .bg .slot{background:var(--cell);border-radius:9px}
+  .tiles{position:absolute;inset:var(--gap)}
+  .tile{position:absolute;border-radius:9px;display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:34px;font-variant-numeric:tabular-nums;cursor:pointer;
+    background:#efe2cc;color:#5b4a30;
+    transition:left .13s ease,top .13s ease,background .18s ease,color .18s ease;
+    will-change:left,top}
+  .noanim .tile{transition:none}
+  .tile.set{background:#f5b86b;color:#3a2608}
+  .over{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .over.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .over .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .over .msg b{color:var(--amber)}
+  .over .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">슬라이드 퍼즐<span class="ref">타일을 밀어 순서를 맞춘다 · 15-Puzzle</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">이동</div><div class="val" id="moves">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">—</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">타일 탭 / 방향키 / 스와이프</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <div class="bg" id="bg"></div>
+    <div class="tiles" id="tiles"></div>
+    <div class="over" id="over">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">빈 칸과 한 줄에 있는 타일을 밀어 1부터 15까지 순서대로. 빈 칸은 마지막.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const N = 4;
+  const SIZE = N * N;
+  const BEST_KEY = "funlab:slide:best";
+
+  const bgEl     = document.getElementById("bg");
+  const tilesEl  = document.getElementById("tiles");
+  const boardEl  = document.getElementById("board");
+  const movesEl  = document.getElementById("moves");
+  const bestEl   = document.getElementById("best");
+  const overEl   = document.getElementById("over");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+
+  // background slots
+  for(let i=0;i<SIZE;i++){ const s=document.createElement("div"); s.className="slot"; bgEl.appendChild(s); }
+
+  // --- state ------------------------------------------------------------
+  // grid: flat array of 16. value 1..15 are tiles, 0 is the gap.
+  // solved state = [1,2,...,15,0].
+  let grid;
+  const tiles = {};   // value -> DOM element (persistent, for smooth transitions)
+  let moves, solved;
+  let best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  function rc(i){ return [Math.floor(i/N), i%N]; }
+  function gapIndex(){ return grid.indexOf(0); }
+
+  // place a tile element at logical [r,c] (same math as the merge prototype)
+  function placeEl(el, r, c){
+    el.style.left   = `calc(${c} * (100% + var(--gap)) / ${N})`;
+    el.style.top    = `calc(${r} * (100% + var(--gap)) / ${N})`;
+    el.style.width  = `calc((100% - ${N-1} * var(--gap)) / ${N})`;
+    el.style.height = `calc((100% - ${N-1} * var(--gap)) / ${N})`;
+  }
+
+  function relayout(){
+    for(let i=0;i<SIZE;i++){
+      const v = grid[i];
+      if(v === 0) continue;
+      const el = tiles[v];
+      const [r,c] = rc(i);
+      placeEl(el, r, c);
+      el.classList.toggle("set", v === i+1);  // tint tiles in their final spot
+    }
+  }
+
+  function updateScores(){
+    movesEl.textContent = moves;
+    bestEl.textContent = best > 0 ? best : "—";
+  }
+
+  // --- shuffle (always solvable: N random legal gap moves from solved) ---
+  function neighbors(i){
+    const [r,c] = rc(i);
+    const out = [];
+    if(r > 0)   out.push(i-N);
+    if(r < N-1) out.push(i+N);
+    if(c > 0)   out.push(i-1);
+    if(c < N-1) out.push(i+1);
+    return out;
+  }
+
+  function isSolved(){
+    for(let i=0;i<SIZE-1;i++) if(grid[i] !== i+1) return false;
+    return grid[SIZE-1] === 0;
+  }
+
+  function shuffle(){
+    grid = [];
+    for(let i=1;i<SIZE;i++) grid.push(i);
+    grid.push(0);
+    let g = SIZE-1, last = -1;
+    const steps = 240;
+    for(let k=0;k<steps;k++){
+      const opts = neighbors(g).filter(n => n !== last);
+      const n = opts[(Math.random()*opts.length)|0];
+      grid[g] = grid[n]; grid[n] = 0;
+      last = g; g = n;
+    }
+    if(isSolved()) shuffle();   // astronomically rare, but keep it honest
+  }
+
+  // --- moves ------------------------------------------------------------
+  // tap a tile that shares the gap's row or column: it (and any tiles
+  // between it and the gap) slide one step toward the gap.
+  function tapTile(v){
+    if(solved) return;
+    const idx = grid.indexOf(v);
+    const g = gapIndex();
+    const [r,c]   = rc(idx);
+    const [gr,gc] = rc(g);
+    let step = 0;
+    if(r === gr)      step = idx > g ? 1 : -1;   // same row -> horizontal slide
+    else if(c === gc) step = idx > g ? N : -N;   // same col -> vertical slide
+    else return;                                 // not aligned with the gap
+
+    let cur = g, moved = 0;
+    while(cur !== idx){
+      const nxt = cur + step;
+      grid[cur] = grid[nxt];
+      grid[nxt] = 0;
+      cur = nxt;
+      moved++;
+    }
+    if(moved > 0) commit(moved);
+  }
+
+  // arrow keys: a tile slides INTO the gap from the named direction.
+  function arrow(dir){
+    if(solved) return;
+    const g = gapIndex();
+    const [gr,gc] = rc(g);
+    let n = -1;
+    if(dir === "left"  && gc < N-1) n = g + 1;   // tile to the right slides left
+    if(dir === "right" && gc > 0)   n = g - 1;
+    if(dir === "up"    && gr < N-1) n = g + N;   // tile below slides up
+    if(dir === "down"  && gr > 0)   n = g - N;
+    if(n < 0) return;
+    grid[g] = grid[n];
+    grid[n] = 0;
+    commit(1);
+  }
+
+  function commit(moved){
+    moves += moved;
+    relayout();
+    updateScores();
+    if(isSolved()) win();
+  }
+
+  function win(){
+    solved = true;
+    if(best === 0 || moves < best){
+      best = moves;
+      localStorage.setItem(BEST_KEY, String(best));
+    }
+    updateScores();
+    overMsg.innerHTML = `맞췄다 · <b>${moves}</b>수`;
+    overSmall.textContent = (moves === best)
+      ? "최소 이동 기록 경신!" : "순서 완성. 더 적은 수로도 가능하다.";
+    overEl.classList.add("show");
+  }
+
+  // --- init -------------------------------------------------------------
+  function init(){
+    shuffle();
+    moves = 0;
+    solved = false;
+    overEl.classList.remove("show");
+
+    // rebuild tile elements fresh each game
+    tilesEl.innerHTML = "";
+    for(const k in tiles) delete tiles[k];
+    for(let v=1; v<SIZE; v++){
+      const el = document.createElement("div");
+      el.className = "tile";
+      el.textContent = v;
+      el.addEventListener("click", () => tapTile(v));
+      tiles[v] = el;
+      tilesEl.appendChild(el);
+    }
+
+    // place without animating the first layout
+    tilesEl.classList.add("noanim");
+    relayout();
+    void tilesEl.offsetWidth;          // force reflow
+    tilesEl.classList.remove("noanim");
+
+    updateScores();
+  }
+
+  // --- input ------------------------------------------------------------
+  const KEYMAP = {
+    ArrowLeft:"left", ArrowRight:"right", ArrowUp:"up", ArrowDown:"down",
+    a:"left", d:"right", w:"up", s:"down",
+    A:"left", D:"right", W:"up", S:"down",
+    h:"left", l:"right", k:"up", j:"down"
+  };
+  window.addEventListener("keydown", e=>{
+    const dir = KEYMAP[e.key];
+    if(dir){ e.preventDefault(); arrow(dir); }
+  });
+
+  // swipe: slides a tile into the gap from the swipe direction
+  let tStart = null;
+  boardEl.addEventListener("touchstart", e=>{
+    const t = e.changedTouches[0]; tStart = {x:t.clientX, y:t.clientY};
+  }, {passive:true});
+  boardEl.addEventListener("touchend", e=>{
+    if(!tStart) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - tStart.x, dy = t.clientY - tStart.y;
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    tStart = null;
+    if(Math.max(ax,ay) < 24) return;   // treat tiny moves as a tap (click fires)
+    if(ax > ay) arrow(dx > 0 ? "right" : "left");
+    else        arrow(dy > 0 ? "down"  : "up");
+  }, {passive:true});
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+})();
+</script>
+</body>
+</html>

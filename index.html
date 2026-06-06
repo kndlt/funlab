@@ -54,6 +54,7 @@
   <div class="grid" id="grid"></div>
   <footer>점수와 메모는 funlab DB에 저장돼 — 다 같이 본다 (오프라인이면 이 브라우저에만). · 계속 자라는 catalog — 배치마다 nerve를 넓힘.<div id="net"></div></footer>
 </div>
+<div id="ts-box" style="position:fixed;bottom:12px;right:12px;z-index:50"></div>
 
 <script>
 const GAMES=[
@@ -97,6 +98,38 @@ const GAMES=[
   // ── timing ──
   {slug:'tower',  title:'탑 쌓기',   ref:'stack',           cat:'timing',
    essence:'타이밍 맞춰 블록을 올려 탑을 쌓는다.', nerve:'timing ⊗ skill'},
+
+  // ══ batch 2 — broaden the nerve space (memory · reflex · flow · skill · puzzle) ══
+  // ── memory ──
+  {slug:'simon',  title:'사이먼',    ref:'Simon',           cat:'memory',
+   essence:'점점 길어지는 빛 순서를 *기억*해 따라친다.', nerve:'memory ⊗ sequence'},
+  {slug:'match',  title:'짝맞추기',  ref:'Concentration',   cat:'memory',
+   essence:'뒤집어 같은 짝을 *기억*해 맞춘다.', nerve:'memory ⊗ pairs'},
+  // ── reflex ──
+  {slug:'reflex', title:'반응속도',  ref:'Reaction Test',   cat:'reflex',
+   essence:'초록으로 바뀌는 *순간* 탭 — 빠를수록 좋다.', nerve:'reflex ⊗ speed'},
+  {slug:'whack',  title:'두더지',    ref:'Whack-a-Mole',    cat:'reflex',
+   essence:'튀어나오는 걸 *빠르게* 때린다.', nerve:'reflex ⊗ aim'},
+  // ── flow ──
+  {slug:'flappy', title:'플래피',    ref:'Flappy Bird',     cat:'flow',
+   essence:'탭으로 떠서 틈을 *통과*한다.', nerve:'flow ⊗ nerve'},
+  {slug:'runner', title:'점프 러너', ref:'Endless Runner',  cat:'flow',
+   essence:'장애물을 *점프*로 넘으며 달린다.', nerve:'flow ⊗ timing'},
+  // ── skill ──
+  {slug:'breakout',title:'벽돌깨기', ref:'Breakout',        cat:'skill',
+   essence:'패들로 공을 튕겨 벽돌을 *깬다*.', nerve:'skill ⊗ aim'},
+  {slug:'typing', title:'타자',      ref:'Typing Speed',    cat:'skill',
+   essence:'*빠르고 정확하게* 친다.', nerve:'skill ⊗ speed'},
+  // ── puzzle ──
+  {slug:'slide',  title:'슬라이드 퍼즐',ref:'15-Puzzle',    cat:'puzzle',
+   essence:'타일을 밀어 *순서*를 맞춘다.', nerve:'order ⊗ patience'},
+  {slug:'lights', title:'라이트 아웃',ref:'Lights Out',     cat:'puzzle',
+   essence:'누르면 주변까지 토글 — 전부 *끈다*.', nerve:'deduction ⊗ logic'},
+  {slug:'maze',   title:'미로',      ref:'Maze',            cat:'puzzle',
+   essence:'길을 찾아 *빠져나간다*.', nerve:'exploration ⊗ spatial'},
+  // ── mastery (joins 머지) ──
+  {slug:'gems',   title:'보석 맞추기',ref:'Match-3',        cat:'mastery',
+   essence:'인접한 둘을 바꿔 셋 이상을 *터뜨린다*.', nerve:'mastery ⊗ cascade'},
 ];
 
 const grid=document.getElementById('grid');
@@ -119,6 +152,33 @@ function voterId(){
 }
 const VOTER=voterId();
 
+// ── Cloudflare Turnstile — gates free-text comments (not scores). The note
+// write goes through the Worker (/api/note), which verifies this token with
+// the secret. Empty sitekey => comments stay localStorage-only (feature off).
+const TS_SITEKEY=''; // set to the Turnstile sitekey (0x...) to enable comments
+let tsId, tsResolve=null;
+window.onTurnstileLoad=function(){
+  tsId=turnstile.render('#ts-box',{
+    sitekey:TS_SITEKEY, execution:'execute', appearance:'interaction-only', size:'flexible',
+    callback:t=>{const r=tsResolve;tsResolve=null;if(r)r(t);},
+    'error-callback':()=>{const r=tsResolve;tsResolve=null;if(r)r(null);},
+    'expired-callback':()=>{const r=tsResolve;tsResolve=null;if(r)r(null);},
+  });
+};
+function tsToken(){ // resolve a fresh single-use token (or null if unavailable)
+  return new Promise(res=>{
+    if(!TS_SITEKEY||typeof turnstile==='undefined'||tsId===undefined){res(null);return;}
+    tsResolve=res;
+    try{turnstile.reset(tsId);turnstile.execute(tsId);}catch(e){tsResolve=null;res(null);return;}
+    setTimeout(()=>{if(tsResolve===res){tsResolve=null;res(null);}},15000);
+  });
+}
+if(TS_SITEKEY){
+  const s=document.createElement('script');
+  s.src='https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileLoad&render=explicit';
+  s.async=true;s.defer=true;document.head.appendChild(s);
+}
+
 function sb(path,opts){
   opts=opts||{};
   return fetch(REST+path,Object.assign({},opts,{headers:Object.assign(
@@ -126,7 +186,6 @@ function sb(path,opts){
 }
 let COMM={};   // game_slug -> {n, avg} community aggregate (everyone)
 let MINE={};   // game_slug -> {score, note} this voter's own row
-let netDown=false;
 
 async function loadCommunity(){
   try{const r=await sb('/funlab_rating_summary?select=game_slug,n,avg_score');if(!r.ok)throw 0;
@@ -165,8 +224,8 @@ async function clearRating(slug,card){
   try{await del(slug);await refreshComm(slug,card);}catch(e){netFail();}
 }
 function commText(c){return (c&&c.n)?`⭐ <b>${c.avg}</b> · ${c.n}명 평가`:'아직 평가 없음 — 첫 평가 남겨봐';}
-function netFail(){if(netDown)return;netDown=true;
-  document.getElementById('net').textContent='⚠ DB 연결 안 됨 — 점수·메모는 이 브라우저(localStorage)에만 저장됨.';}
+function netFail(msg){
+  document.getElementById('net').textContent=msg||'⚠ DB 연결 안 됨 — 점수·메모는 이 브라우저(localStorage)에만 저장됨.';}
 
 const cats=['전체',...[...new Set(GAMES.map(g=>g.cat))]];
 cats.forEach(c=>{
@@ -205,8 +264,7 @@ function render(){
       card.querySelectorAll('.nums button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
       card.querySelector('.clear').style.display='inline';
       MINE[g.slug]=Object.assign({},MINE[g.slug],{score:n});
-      const noteVal=card.querySelector('.note').value;
-      try{await upsert(g.slug,{score:n,note:noteVal||null});await refreshComm(g.slug,card);}
+      try{await upsert(g.slug,{score:n});await refreshComm(g.slug,card);}  // score only — note goes through the Turnstile-gated Worker
       catch(e){netFail();}
     });
     card.querySelector('.clear').onclick=()=>clearRating(g.slug,card);
@@ -214,9 +272,19 @@ function render(){
       const noteVal=e.target.value;
       localStorage.setItem(k(g.slug,'note'),noteVal);
       const sc=MINE[g.slug]&&MINE[g.slug].score;
-      if(sc==null)return; // server needs a score first; keep note in localStorage until then
-      MINE[g.slug].note=noteVal;
-      try{await upsert(g.slug,{score:sc,note:noteVal||null});}catch(e){netFail();}
+      if(sc==null)return;        // server needs a score row first; keep note local until then
+      if(!TS_SITEKEY){           // Turnstile not configured yet — write note directly (pre-gating behavior)
+        try{await upsert(g.slug,{score:sc,note:noteVal||null});if(MINE[g.slug])MINE[g.slug].note=noteVal;}catch(e){netFail();}
+        return;
+      }
+      const token=await tsToken();
+      if(!token){netFail('코멘트 확인 실패(Turnstile) — 잠시 후 다시 시도. 메모는 이 브라우저에 저장됨.');return;}
+      try{
+        const r=await fetch('/api/note',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({game_slug:g.slug,voter_id:VOTER,note:noteVal,token})});
+        if(!r.ok)throw new Error('note '+r.status);
+        if(MINE[g.slug])MINE[g.slug].note=noteVal;
+      }catch(err){netFail();}
     };
     grid.appendChild(card);
   });

@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>벽돌깨기 · Breakout</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:6px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 11px;text-align:center;min-width:56px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:20px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:100/115;touch-action:none;overflow:hidden;cursor:pointer}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">벽돌깨기<span class="ref">패들로 공을 튕겨 벽돌을 깬다 · Breakout</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">점수</div><div class="val" id="score">0</div></div>
+      <div class="box"><div class="lbl">목숨</div><div class="val" id="lives">3</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">마우스 / 드래그 / ← →</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <canvas id="cv"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">패들로 공을 튕겨 모두 깨라. 떨어뜨리면 목숨 하나씩. 가장자리에 맞히면 더 휘어 나간다.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // --- logical coordinate space (decoupled from device pixels) ----------
+  const LW = 100, LH = 115;            // logical board size
+  const BEST_KEY = "funlab:breakout:best";
+
+  const COLS = 7, ROWS = 5;
+  const SIDE = 4, GAP = 1.2, TOPMARGIN = 12, ROWGAP = 1.2;
+  const BRICK_H = 4;
+  const BRICK_W = (LW - 2*SIDE - (COLS-1)*GAP) / COLS;
+  const TOTAL   = COLS * ROWS;
+  const ROW_COLOR  = ["#ff6f2c","#ff8a3d","#ffa450","#ffc06a","#ffd596"];
+  const ROW_POINTS = [50,40,30,20,10];
+
+  const PW = 18, PH = 2.6;             // paddle size
+  const PADDLE_Y = LH - 8;             // paddle top
+  const R = 1.55;                      // ball radius
+  const BASE_SPEED = 72;               // logical units / sec
+  const SPEED_GROWTH = 0.6;            // up to +60% when all bricks gone
+  const MAX_BOUNCE = 1.0472;           // 60° steering off paddle
+  const KEY_SPEED = 95;                // paddle keyboard speed (units/sec)
+
+  const boardEl  = document.getElementById("board");
+  const cv       = document.getElementById("cv");
+  const ctx      = cv.getContext("2d");
+  const scoreEl  = document.getElementById("score");
+  const livesEl  = document.getElementById("lives");
+  const bestEl   = document.getElementById("best");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+
+  // --- pixel sizing (retina) --------------------------------------------
+  let scale = 1;     // device px per logical unit
+  function resize(){
+    const rect = boardEl.getBoundingClientRect();
+    const dpr  = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const w = Math.round(rect.width * dpr);
+    const h = Math.round(rect.height * dpr);
+    cv.width  = w;
+    cv.height = h;
+    scale = w / LW;
+  }
+  window.addEventListener("resize", resize);
+
+  // --- state ------------------------------------------------------------
+  let bricks;        // {x,y,w,h,color,points,alive}
+  let remaining;
+  let paddleX;       // center x of paddle
+  let ball;          // {x,y,vx,vy}
+  let speed;         // current ball speed magnitude
+  let score, best, lives;
+  let state;         // 'ready' | 'playing' | 'over' | 'win'
+  let lastFrame;
+  const keys = {left:false, right:false};
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  function clamp(v, lo, hi){ return v < lo ? lo : (v > hi ? hi : v); }
+
+  function buildBricks(){
+    bricks = [];
+    for(let r=0;r<ROWS;r++){
+      for(let c=0;c<COLS;c++){
+        bricks.push({
+          x: SIDE + c*(BRICK_W+GAP),
+          y: TOPMARGIN + r*(BRICK_H+ROWGAP),
+          w: BRICK_W, h: BRICK_H,
+          color: ROW_COLOR[r], points: ROW_POINTS[r],
+          alive: true
+        });
+      }
+    }
+    remaining = TOTAL;
+  }
+
+  function currentSpeed(){
+    return BASE_SPEED * (1 + SPEED_GROWTH * (TOTAL - remaining) / TOTAL);
+  }
+
+  function resetBall(){
+    // glue ball to paddle, wait for launch
+    speed = currentSpeed();
+    ball = { x: paddleX, y: PADDLE_Y - R - 0.2, vx: 0, vy: 0 };
+    state = "ready";
+  }
+
+  function init(){
+    resize();
+    buildBricks();
+    paddleX = LW/2;
+    score = 0;
+    lives = 3;
+    resetBall();
+    overlay.classList.remove("show");
+    updateScores();
+    lastFrame = performance.now();
+  }
+
+  function updateScores(){
+    scoreEl.textContent = score;
+    livesEl.textContent = lives;
+    bestEl.textContent  = best;
+  }
+
+  function launch(){
+    if(state !== "ready") return;
+    state = "playing";
+    const a = (Math.random()*2 - 1) * 0.3;   // small initial steer
+    speed = currentSpeed();
+    ball.vx = speed * Math.sin(a);
+    ball.vy = -speed * Math.cos(a);
+  }
+
+  function gameOver(){
+    state = "over";
+    const won = score >= best && score > 0;
+    overMsg.innerHTML = `게임 끝 · 점수 <b>${score}</b>`;
+    overSmall.textContent = won ? "최고 기록 경신!" : "공을 놓쳤다. 다시.";
+    overlay.classList.add("show");
+  }
+
+  function winGame(){
+    state = "win";
+    overMsg.innerHTML = `클리어! · 점수 <b>${score}</b>`;
+    overSmall.textContent = "벽돌을 모두 깼다. 손맛 좋다.";
+    overlay.classList.add("show");
+  }
+
+  function addScore(p){
+    score += p;
+    if(score > best){ best = score; localStorage.setItem(BEST_KEY, String(best)); }
+    updateScores();
+  }
+
+  function loseLife(){
+    lives -= 1;
+    updateScores();
+    if(lives <= 0){ gameOver(); }
+    else { resetBall(); }
+  }
+
+  // keep the ball from settling into a near-horizontal loop
+  function nudgeVy(){
+    const sp = Math.hypot(ball.vx, ball.vy) || speed;
+    const minVy = sp * 0.22;
+    if(Math.abs(ball.vy) < minVy){
+      ball.vy = (ball.vy < 0 ? -1 : 1) * minVy;
+      const rem = sp*sp - ball.vy*ball.vy;
+      ball.vx = (ball.vx < 0 ? -1 : 1) * Math.sqrt(Math.max(0, rem));
+    }
+  }
+
+  // resolve circle-vs-brick on the correct axis using min penetration
+  function hitBricks(){
+    for(let i=0;i<bricks.length;i++){
+      const b = bricks[i];
+      if(!b.alive) continue;
+      // broad reject
+      if(ball.x + R < b.x || ball.x - R > b.x + b.w ||
+         ball.y + R < b.y || ball.y - R > b.y + b.h) continue;
+      // closest point on brick to ball center
+      const cx = clamp(ball.x, b.x, b.x + b.w);
+      const cy = clamp(ball.y, b.y, b.y + b.h);
+      const dx = ball.x - cx, dy = ball.y - cy;
+      if(dx*dx + dy*dy > R*R) continue;     // no real overlap
+
+      // penetration depths along each axis
+      const overL = (ball.x + R) - b.x;
+      const overR = (b.x + b.w) - (ball.x - R);
+      const overT = (ball.y + R) - b.y;
+      const overB = (b.y + b.h) - (ball.y - R);
+      const minX = Math.min(overL, overR);
+      const minY = Math.min(overT, overB);
+
+      if(minX < minY){
+        ball.vx = -ball.vx;
+        ball.x += (overL < overR) ? -minX : minX;
+      } else {
+        ball.vy = -ball.vy;
+        ball.y += (overT < overB) ? -minY : minY;
+      }
+
+      b.alive = false;
+      remaining -= 1;
+      addScore(b.points);
+      // ramp speed as the board clears, keep direction
+      const ns = currentSpeed();
+      const cur = Math.hypot(ball.vx, ball.vy) || ns;
+      ball.vx = ball.vx / cur * ns;
+      ball.vy = ball.vy / cur * ns;
+      speed = ns;
+      nudgeVy();
+      if(remaining <= 0) winGame();
+      return; // one brick per substep avoids double-resolves
+    }
+  }
+
+  function hitPaddle(){
+    if(ball.vy <= 0) return;
+    const top = PADDLE_Y, bot = PADDLE_Y + PH;
+    const left = paddleX - PW/2, right = paddleX + PW/2;
+    if(ball.y + R < top || ball.y - R > bot) return;
+    if(ball.x < left - R || ball.x > right + R) return;
+    // steer by where it lands on the paddle
+    const rel = clamp((ball.x - paddleX) / (PW/2), -1, 1);
+    const a = rel * MAX_BOUNCE;
+    const sp = Math.hypot(ball.vx, ball.vy) || speed;
+    ball.vx = sp * Math.sin(a);
+    ball.vy = -sp * Math.cos(a);
+    ball.y = top - R - 0.01;
+  }
+
+  function substep(sdt){
+    ball.x += ball.vx * sdt;
+    ball.y += ball.vy * sdt;
+
+    // walls
+    if(ball.x - R < 0){ ball.x = R; ball.vx = Math.abs(ball.vx); }
+    else if(ball.x + R > LW){ ball.x = LW - R; ball.vx = -Math.abs(ball.vx); }
+    if(ball.y - R < 0){ ball.y = R; ball.vy = Math.abs(ball.vy); }
+
+    // lost below the board
+    if(ball.y - R > LH){ loseLife(); return; }
+
+    hitPaddle();
+    hitBricks();
+  }
+
+  function update(dt){
+    // paddle keyboard movement (active in ready + playing)
+    if(state === "ready" || state === "playing"){
+      if(keys.left)  paddleX -= KEY_SPEED * dt;
+      if(keys.right) paddleX += KEY_SPEED * dt;
+      paddleX = clamp(paddleX, PW/2, LW - PW/2);
+    }
+    if(state === "ready"){
+      ball.x = clamp(paddleX, R, LW - R);
+      ball.y = PADDLE_Y - R - 0.2;
+      return;
+    }
+    if(state !== "playing") return;
+
+    const dist = Math.hypot(ball.vx, ball.vy) * dt;
+    const steps = Math.min(8, Math.max(1, Math.ceil(dist / (R * 0.5))));
+    const sdt = dt / steps;
+    for(let i=0;i<steps && state === "playing"; i++) substep(sdt);
+  }
+
+  // --- rendering --------------------------------------------------------
+  function S(v){ return v * scale; }
+
+  function roundRect(c, x, y, w, h, r){
+    r = Math.min(r, w/2, h/2);
+    c.beginPath();
+    c.moveTo(x+r, y);
+    c.arcTo(x+w, y,   x+w, y+h, r);
+    c.arcTo(x+w, y+h, x,   y+h, r);
+    c.arcTo(x,   y+h, x,   y,   r);
+    c.arcTo(x,   y,   x+w, y,   r);
+    c.closePath();
+  }
+
+  function render(){
+    const W = cv.width, H = cv.height;
+    ctx.clearRect(0,0,W,H);
+
+    // bricks
+    for(let i=0;i<bricks.length;i++){
+      const b = bricks[i];
+      if(!b.alive) continue;
+      const x = S(b.x), y = S(b.y), w = S(b.w), h = S(b.h);
+      ctx.fillStyle = b.color;
+      roundRect(ctx, x, y, w, h, S(0.8));
+      ctx.fill();
+      // top highlight
+      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      roundRect(ctx, x, y, w, h*0.42, S(0.8));
+      ctx.fill();
+    }
+
+    // paddle
+    const px = S(paddleX - PW/2), py = S(PADDLE_Y), pw = S(PW), ph = S(PH);
+    const pg = ctx.createLinearGradient(0, py, 0, py + ph);
+    pg.addColorStop(0, "#ffd08a");
+    pg.addColorStop(1, "#ff9e3d");
+    ctx.fillStyle = pg;
+    roundRect(ctx, px, py, pw, ph, ph/2);
+    ctx.fill();
+
+    // ball (warm glow)
+    const bx = S(ball.x), by = S(ball.y), br = S(R);
+    ctx.save();
+    ctx.shadowColor = "rgba(255,177,84,0.85)";
+    ctx.shadowBlur  = br * 1.6;
+    const g = ctx.createRadialGradient(bx-br*0.3, by-br*0.3, br*0.1, bx, by, br);
+    g.addColorStop(0, "#ffe6c0");
+    g.addColorStop(1, "#ff9a3d");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(bx, by, br, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    // launch hint
+    if(state === "ready"){
+      const t = performance.now()/420;
+      ctx.globalAlpha = 0.55 + 0.35*Math.sin(t);
+      ctx.fillStyle = "#f6ead8";
+      ctx.font = `700 ${Math.round(S(3.4))}px "Apple SD Gothic Neo",system-ui,sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("탭 또는 Space로 발사", W/2, S(PADDLE_Y - 14));
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // --- main loop --------------------------------------------------------
+  function frame(now){
+    let dt = (now - lastFrame) / 1000;
+    lastFrame = now;
+    if(dt > 0.033) dt = 0.033;   // cap to avoid tunneling on stalls
+    update(dt);
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  // --- input ------------------------------------------------------------
+  function pointerToLogical(clientX){
+    const rect = boardEl.getBoundingClientRect();
+    return clamp((clientX - rect.left) / rect.width * LW, PW/2, LW - PW/2);
+  }
+
+  boardEl.addEventListener("mousemove", e=>{
+    if(state === "ready" || state === "playing") paddleX = pointerToLogical(e.clientX);
+  });
+  boardEl.addEventListener("mousedown", ()=>{ launch(); });
+
+  boardEl.addEventListener("touchstart", e=>{
+    const t = e.changedTouches[0];
+    paddleX = pointerToLogical(t.clientX);
+    launch();
+  }, {passive:true});
+  boardEl.addEventListener("touchmove", e=>{
+    const t = e.changedTouches[0];
+    paddleX = pointerToLogical(t.clientX);
+  }, {passive:true});
+
+  window.addEventListener("keydown", e=>{
+    const k = e.key;
+    if(k === "ArrowLeft" || k === "a" || k === "A"){ keys.left = true; e.preventDefault(); }
+    else if(k === "ArrowRight" || k === "d" || k === "D"){ keys.right = true; e.preventDefault(); }
+    else if(k === " " || k === "ArrowUp" || k === "w" || k === "W"){ launch(); e.preventDefault(); }
+  });
+  window.addEventListener("keyup", e=>{
+    const k = e.key;
+    if(k === "ArrowLeft" || k === "a" || k === "A") keys.left = false;
+    else if(k === "ArrowRight" || k === "d" || k === "D") keys.right = false;
+  });
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
