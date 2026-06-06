@@ -31,6 +31,8 @@
   .play:active{transform:scale(.96)}
   .score{margin-top:5px;border-top:1px solid var(--line);padding-top:9px}
   .score .lbl{font-size:11px;color:var(--muted);margin-bottom:5px}
+  .clear{margin-left:8px;color:var(--muted);font-size:11px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+  .clear:hover{color:var(--amber)}
   .nums{display:flex;gap:3px;flex-wrap:wrap}
   .nums button{width:25px;height:25px;border:1px solid var(--line);background:#241c12;color:var(--ink);border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:700;font-family:inherit}
   .nums button:hover{border-color:#7a5a30}
@@ -149,6 +151,19 @@ async function refreshComm(slug,card){
     summary();
   }catch(e){}
 }
+async function del(slug){ // remove this voter's whole row for a game
+  const r=await sb('/funlab_ratings?game_slug=eq.'+encodeURIComponent(slug)+'&voter_id=eq.'+encodeURIComponent(VOTER),
+    {method:'DELETE',headers:{Prefer:'return=minimal'}});
+  if(!r.ok&&r.status!==404)throw new Error('delete '+r.status+' '+await r.text());
+}
+async function clearRating(slug,card){
+  localStorage.removeItem(k(slug,'score'));localStorage.removeItem(k(slug,'note'));
+  delete MINE[slug];
+  card.querySelectorAll('.nums button').forEach(x=>x.classList.remove('on'));
+  const note=card.querySelector('.note');if(note)note.value='';
+  const cl=card.querySelector('.clear');if(cl)cl.style.display='none';
+  try{await del(slug);await refreshComm(slug,card);}catch(e){netFail();}
+}
 function commText(c){return (c&&c.n)?`⭐ <b>${c.avg}</b> · ${c.n}명 평가`:'아직 평가 없음 — 첫 평가 남겨봐';}
 function netFail(){if(netDown)return;netDown=true;
   document.getElementById('net').textContent='⚠ DB 연결 안 됨 — 점수·메모는 이 브라우저(localStorage)에만 저장됨.';}
@@ -179,19 +194,22 @@ function render(){
       <a class="play" href="games/${g.slug}/">▶ 플레이</a>
       <div class="score">
         <div class="comm${c&&c.n?'':' empty'}">${commText(c)}</div>
-        <div class="lbl">재밌었나? (1 = 노잼, 10 = 이건 진짜)</div>
+        <div class="lbl">재밌었나? (1 = 노잼, 10 = 이건 진짜)<span class="clear" style="display:${saved?'inline':'none'}">✕ 평가 지우기</span></div>
         <div class="nums">${nums}</div>
         <textarea class="note" placeholder="💭 한 줄 메모…">${note.replace(/</g,'&lt;')}</textarea>
       </div>`;
     card.querySelectorAll('.nums button').forEach(b=>b.onclick=async()=>{
+      if(b.classList.contains('on')){await clearRating(g.slug,card);return;} // re-click selected -> clear
       const n=+b.dataset.n;
       localStorage.setItem(k(g.slug,'score'),n);
       card.querySelectorAll('.nums button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+      card.querySelector('.clear').style.display='inline';
       MINE[g.slug]=Object.assign({},MINE[g.slug],{score:n});
       const noteVal=card.querySelector('.note').value;
       try{await upsert(g.slug,{score:n,note:noteVal||null});await refreshComm(g.slug,card);}
       catch(e){netFail();}
     });
+    card.querySelector('.clear').onclick=()=>clearRating(g.slug,card);
     card.querySelector('.note').onblur=async e=>{
       const noteVal=e.target.value;
       localStorage.setItem(k(g.slug,'note'),noteVal);
