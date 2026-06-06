@@ -4,6 +4,7 @@
 .gitignore
 .assetsignore
 wrangler.jsonc
+worker.js
 .wrangler
 node_modules
 package.json

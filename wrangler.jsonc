@@ -2,15 +2,24 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "funlab",
 	"compatibility_date": "2025-08-20",
-	// Static-assets-only for now (no `main`): the whole site is hand-written
-	// HTML under games/<slug>/ plus the portal index.html. A Worker script +
-	// Durable Objects get added here later for real-time play, keeping the
-	// same slug boundary. Directory paths resolve to their index.html, so
-	// games/<slug>/ serves games/<slug>/index.html automatically.
+	// The site is hand-written static HTML (portal index.html + games/<slug>/),
+	// served by the ASSETS binding. worker.js handles only /api/* — today it
+	// gates comments behind Turnstile; Durable Objects for real-time play land
+	// here later on the same slug boundary. Directory paths resolve to their
+	// index.html, so games/<slug>/ serves games/<slug>/index.html.
+	"main": "worker.js",
 	"assets": {
-		"directory": "."
+		"directory": ".",
+		"binding": "ASSETS",
+		"run_worker_first": [ "/api/*" ]
 	},
 	"routes": [
 		{ "pattern": "funlab.sprited.ai", "custom_domain": true }
-	]
+	],
+	// non-secret, browser-safe (publishable key — RLS is the gate).
+	// TURNSTILE_SECRET is set via `wrangler secret put`, never here.
+	"vars": {
+		"SUPABASE_URL": "https://idgglxgnviovwrwlmgjr.supabase.co",
+		"SUPABASE_KEY": "sb_publishable_6Kxa6qylzE_naz-4oAUivQ_yTYFGDJX"
+	}
 }
