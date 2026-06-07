@@ -5,529 +5,313 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>마법진 · funlab</title>
 <style>
-  :root{
-    --bg:#14110d;--panel:#1d1812;--line:#3a3024;--cream:#f6ead8;--ink:#e7dcc8;
-    --muted:#a9977e;--amber:#ffb154;--violet:#b48cff;--green:#9fd49a;
-  }
+  :root{--bg:#14110d;--panel:#1d1812;--line:#3a3024;--cream:#f6ead8;--ink:#e7dcc8;--muted:#a9977e;--amber:#ffb154}
   *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{min-height:100%}
-  body{
-    background:var(--bg);color:var(--ink);
-    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;line-height:1.6;
-    background-image:
-      radial-gradient(60% 45% at 80% -8%,rgba(255,178,84,.10),transparent 60%),
-      radial-gradient(50% 40% at 12% 105%,rgba(180,140,255,.08),transparent 60%);
-    -webkit-font-smoothing:antialiased;-webkit-user-select:none;user-select:none;
-  }
+  body{background:var(--bg);color:var(--ink);font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;line-height:1.6;
+    background-image:radial-gradient(60% 45% at 80% -8%,rgba(255,178,84,.10),transparent 60%);-webkit-font-smoothing:antialiased;-webkit-user-select:none;user-select:none}
   .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:50}
   .back:hover{color:var(--amber)}
-  .wrap{max-width:980px;margin:0 auto;padding:50px 18px 90px;display:flex;flex-direction:column;align-items:center}
-  h1{font-size:30px;font-weight:800;letter-spacing:1px;
-    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .sub{color:var(--muted);font-size:13px;margin-top:6px;text-align:center;max-width:560px}
+  .wrap{max-width:980px;margin:0 auto;padding:46px 14px 70px;display:flex;flex-direction:column;align-items:center}
+  h1{font-size:27px;font-weight:800;letter-spacing:1px;background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);font-size:12px;margin-top:4px;text-align:center;max-width:560px}
+  .layout{display:flex;gap:18px;margin-top:18px;width:100%;justify-content:center;flex-wrap:wrap;align-items:flex-start}
+  .col{display:flex;flex-direction:column;gap:11px}
 
-  .layout{display:flex;gap:22px;margin-top:26px;width:100%;justify-content:center;flex-wrap:wrap;align-items:flex-start}
-  .col{display:flex;flex-direction:column;gap:14px}
-  .left{align-items:center}
-
-  /* ---- ritual grid ---- */
-  .board{position:relative;touch-action:none}
-  .grid{
-    display:grid;grid-template-columns:repeat(5,56px);grid-template-rows:repeat(5,56px);gap:7px;
-    padding:16px;background:var(--panel);border:1px solid var(--line);border-radius:18px;
-    box-shadow:inset 0 0 50px rgba(0,0,0,.45);touch-action:none;
-  }
-  .grid.charging{animation:shake .42s ease}
-  @keyframes shake{0%,100%{transform:translate(0,0)}20%{transform:translate(-1px,1px)}50%{transform:translate(1px,-1px)}80%{transform:translate(-1px,0)}}
-  .cell{
-    border:1px solid var(--line);border-radius:11px;background:#191309;cursor:pointer;position:relative;
-    transition:background .16s,box-shadow .25s,border-color .16s,transform .08s;
-  }
-  .cell.ley::after{content:"";position:absolute;inset:0;margin:auto;width:5px;height:5px;border-radius:50%;
-    background:#4a3a22;transition:background .2s,box-shadow .2s}
+  /* ritual grid */
+  .grid{display:grid;grid-template-columns:repeat(5,42px);grid-template-rows:repeat(5,42px);gap:5px;padding:13px;
+    background:var(--panel);border:1px solid var(--line);border-radius:15px;box-shadow:inset 0 0 40px rgba(0,0,0,.45);touch-action:none}
+  .cell{border:1px solid var(--line);border-radius:8px;background:#191309;cursor:pointer;position:relative;transition:background .15s,box-shadow .25s,border-color .15s}
+  .cell.ley::after{content:"";position:absolute;inset:0;margin:auto;width:4px;height:4px;border-radius:50%;background:#4a3a22}
   .cell:hover{border-color:#6d5226;background:#211810}
-  .cell.on{
-    border-color:#ffce86;
-    background:radial-gradient(circle at 38% 32%,#fff0cf,var(--ec,#ffb154) 60%,#7a52c0 150%);
-    box-shadow:0 0 12px var(--eg,rgba(255,178,84,.6)),inset 0 0 8px rgba(255,255,255,.32);
-    animation:breathe 2.6s ease-in-out infinite;
-  }
-  .cell.on.ley::after{background:#fff;box-shadow:0 0 8px #fff}
-  @keyframes breathe{0%,100%{filter:brightness(1)}50%{filter:brightness(1.16)}}
-  .cell.reveal{
-    background:radial-gradient(circle at 40% 34%,#fff6e6,var(--spell,#ffb154) 60%);
-    border-color:#fff;box-shadow:0 0 18px var(--spell,#ffb154),0 0 40px var(--spell,#ffb154);
-    animation:revealpulse 1.4s ease-out;
-  }
-  @keyframes revealpulse{0%{transform:scale(.7);filter:brightness(2)}45%{transform:scale(1.12)}100%{transform:scale(1);filter:brightness(1)}}
-
-  .flourish{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;z-index:30}
-  .flourish .rar{font-size:13px;letter-spacing:6px;color:var(--spell,#ffb154);margin-bottom:4px;opacity:0;animation:nameIn 2s ease .05s forwards}
-  .flourish .name{font-size:34px;font-weight:800;letter-spacing:3px;color:#fff;text-align:center;
-    text-shadow:0 0 16px var(--spell,#ffb154),0 0 40px var(--spell,#ffb154);animation:nameIn 2s cubic-bezier(.2,.9,.2,1) forwards}
-  .flourish .wf{font-size:13px;color:#fff;margin-top:8px;font-weight:800;letter-spacing:2px;
-    background:var(--spell,#ffb154);padding:3px 12px;border-radius:20px;opacity:0;animation:nameIn 2s ease .2s forwards}
-  @keyframes nameIn{0%{transform:scale(.55) translateY(8px);opacity:0;filter:blur(6px)}18%{opacity:1;filter:blur(0)}35%{transform:scale(1.08)}55%{transform:scale(1)}82%{opacity:1}100%{transform:scale(1.02) translateY(-6px);opacity:0}}
-
-  /* ---- live readout ---- */
-  .readout{display:flex;gap:8px;align-items:stretch;justify-content:center}
-  .ro{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:7px 14px;text-align:center;min-width:96px}
-  .ro .lbl{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
-  .ro .val{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
-  .ro .el{color:var(--ec,var(--muted))}
-
-  .controls{display:flex;gap:10px;align-items:center}
-  .cast{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;font-size:16px;border:none;
-    padding:11px 30px;border-radius:26px;cursor:pointer;letter-spacing:1px;
-    box-shadow:0 4px 0 #b96f1f,0 6px 16px rgba(255,160,60,.30);transition:transform .08s,box-shadow .12s,opacity .15s}
-  .cast:hover{filter:brightness(1.05)}
-  .cast:active{transform:translateY(3px);box-shadow:0 1px 0 #b96f1f}
-  .cast:disabled{opacity:.5;cursor:default}
-  .ghost{background:#241c12;color:var(--muted);border:1px solid var(--line);border-radius:20px;padding:9px 14px;font-size:13px;cursor:pointer;font-family:inherit}
+  .cell.on{border-color:#ffce86;background:radial-gradient(circle at 38% 32%,#fff0cf,var(--ec,#ffb154) 62%);box-shadow:0 0 10px var(--eg,rgba(255,178,84,.55));animation:breathe 2.6s ease-in-out infinite}
+  .cell.on.ley::after{background:#fff;box-shadow:0 0 6px #fff}
+  @keyframes breathe{0%,100%{filter:brightness(1)}50%{filter:brightness(1.15)}}
+  .readout{display:flex;gap:6px;justify-content:center}
+  .ro{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:5px 11px;text-align:center;min-width:80px}
+  .ro .lbl{font-size:9px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .ro .val{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}.ro .el{color:var(--ec,var(--muted))}
+  .controls{display:flex;gap:7px;justify-content:center}
+  .ghost{background:#241c12;color:var(--muted);border:1px solid var(--line);border-radius:17px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit}
   .ghost:hover{border-color:#7a5a30;color:var(--ink)}
-  .msg{min-height:42px;max-width:380px;text-align:center;font-size:14px;color:var(--ink)}
-  .msg .hot{color:#ffd479;font-weight:800}.msg .warm{color:var(--amber);font-weight:700}.msg .dim{color:var(--muted)}.msg b{color:var(--cream)}
+  .msg{min-height:34px;max-width:280px;text-align:center;font-size:12px;color:var(--ink);align-self:center}
+  .msg .hot{color:#ffd479;font-weight:800}.msg .dim{color:var(--muted)}.msg b{color:var(--cream)}
 
-  /* ---- seals ---- */
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;width:300px}
-  .panel h2{font-size:15px;color:var(--cream);font-weight:800;display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px}
-  .panel h2 .cnt{font-size:12px;color:var(--muted);font-weight:600}
-  .panel .cap{font-size:11.5px;color:var(--muted);margin-bottom:12px}
-  .seal{border:1px solid var(--line);border-radius:11px;padding:9px 11px;margin-bottom:7px;background:#191309;position:relative;transition:opacity .3s,border-color .3s}
-  .seal.locked{opacity:.4}
-  .seal.active{border-color:var(--amber);box-shadow:0 0 0 1px rgba(255,178,84,.3),inset 0 0 18px rgba(255,178,84,.08)}
-  .seal.broken{border-color:#46603a;background:#16190f}
-  .seal .r1{display:flex;justify-content:space-between;align-items:center;gap:8px}
-  .seal .sn{font-weight:800;font-size:13.5px;color:var(--cream)}
-  .seal.locked .sn{color:#6a5c47}
-  .seal .req{font-size:11.5px;white-space:nowrap}
-  .seal .ht{font-size:11px;color:var(--muted);margin-top:2px}
-  .seal.broken .sn::before{content:"✦ ";color:var(--green)}
-  .seal.broken .req{color:var(--green)}
-
-  /* ---- grimoire ---- */
-  .gstats{font-size:12px;color:var(--amber);margin-bottom:10px;display:flex;gap:12px;flex-wrap:wrap}
-  .gstats b{color:var(--cream);font-size:14px}
-  .runes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:330px;overflow-y:auto;padding-right:3px}
-  .rune{border:1px solid var(--line);border-radius:10px;padding:8px 7px 7px;background:#191309;text-align:center;position:relative}
-  .rune .mini{display:grid;grid-template-columns:repeat(5,1fr);gap:2px;width:48px;margin:0 auto 5px}
-  .rune .mini i{aspect-ratio:1/1;border-radius:2px;background:#241c12}
-  .rune .mini i.l{background:var(--rc);box-shadow:0 0 4px var(--rc)}
-  .rune .rn{font-size:10.5px;font-weight:800;color:var(--cream);line-height:1.25;min-height:26px;display:flex;align-items:center;justify-content:center}
-  .rune .meta{font-size:9.5px;color:var(--muted);margin-top:2px}
-  .rune .pw{color:var(--amber);font-weight:700}
-  .rune .wfstar{position:absolute;top:4px;right:5px;font-size:11px}
-  .rune.r-uncommon{border-color:#4a5a3a}.rune.r-rare{border-color:#3a6a8a}
-  .rune.r-legendary{border-color:#b58a3a;box-shadow:0 0 10px rgba(255,178,84,.18)}
-  .rune.r-mythic{border-color:#b06ad0;box-shadow:0 0 12px rgba(180,108,208,.30);animation:mythic 3s ease-in-out infinite}
-  @keyframes mythic{0%,100%{box-shadow:0 0 10px rgba(180,108,208,.25)}50%{box-shadow:0 0 16px rgba(120,200,255,.35)}}
-  .empty{grid-column:1/-1;text-align:center;color:#6a5c47;font-size:12px;padding:24px 6px}
-  .share{margin-top:12px;width:100%;background:#241c12;color:var(--cream);border:1px solid #4a3a22;border-radius:22px;padding:10px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:700}
-  .share:hover{border-color:var(--amber);background:#2a2014}
-  .share.copied{border-color:var(--green);color:var(--green)}
-  .world{font-size:11px;color:#7c6d58;text-align:center;margin-top:8px}
-  .reset{margin-top:6px;width:100%;background:none;border:none;color:#7c6d58;font-size:11px;cursor:pointer;font-family:inherit}
-  .reset:hover{color:#b88}
-  footer{margin-top:38px;color:#6f6150;font-size:11.5px;text-align:center}
-
-  /* awakening overlay */
-  .awaken{position:fixed;inset:0;background:rgba(15,12,9,.92);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:80;text-align:center;padding:24px;animation:fade .4s ease}
-  .awaken.show{display:flex}
-  @keyframes fade{from{opacity:0}to{opacity:1}}
-  .awaken .big{font-size:34px;font-weight:800;background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:3px}
-  .awaken .t{color:var(--ink);font-size:14px;max-width:360px}
-  .awaken button{margin-top:8px}
-
-  @media(max-width:520px){.grid{grid-template-columns:repeat(5,52px);grid-template-rows:repeat(5,52px)}.panel{width:300px}}
+  /* white room */
+  .roomwrap{position:relative}
+  .room{display:block;border-radius:14px;border:1px solid #cfc7b6;cursor:crosshair;touch-action:none;
+    width:440px;height:440px;max-width:80vw;max-height:80vw;box-shadow:0 10px 40px rgba(0,0,0,.35)}
+  .combos{width:200px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px}
+  .panel h2{font-size:13px;color:var(--cream);font-weight:800;margin-bottom:8px;display:flex;justify-content:space-between;align-items:baseline}
+  .panel h2 .cnt{font-size:11px;color:var(--muted);font-weight:600}
+  .clist{display:flex;flex-direction:column;gap:5px;max-height:230px;overflow-y:auto}
+  .citem{font-size:11.5px;border:1px solid var(--line);border-radius:8px;padding:6px 9px;background:#191309}
+  .citem b{color:var(--cream)}.citem .ar{color:var(--muted)}
+  .citem.locked{opacity:.4}.citem.locked b{color:#6a5c47}
+  .grimoire{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;max-width:300px}
+  .rune{width:30px;height:30px;border:1px solid var(--line);border-radius:7px;display:grid;grid-template-columns:repeat(5,1fr);gap:1px;padding:3px;background:#191309;cursor:pointer}
+  .rune i{border-radius:1px;background:#241c12}.rune i.l{background:var(--rc);box-shadow:0 0 2px var(--rc)}
+  .rune.sel{border-color:var(--amber)}
+  footer{margin-top:30px;color:#6f6150;font-size:11px;text-align:center}
 </style>
 </head>
 <body>
 <a class="back" href="../../index.html">← funlab</a>
 <div class="wrap">
   <h1>✦ 마법진 ✦</h1>
-  <p class="sub">칸을 이어 <b>문양</b>을 그려라. 모양이 곧 마법이다 — 그 형태가 속성과 힘을, 그리고 <b>이름</b>을 정한다. 처음 그려진 문양이라면, 그 룬은 <b>세계에서 당신만의 것</b>이 된다.</p>
+  <p class="sub">왼쪽 격자에 <b>문양</b>을 그려 마법을 정하고, 오른쪽 <b>화이트 룸</b>을 클릭해 시전하라. 두 마법을 겹치면 — 불에 바람을 부으면 번지고, 불에 물을 부으면 증기가 된다.</p>
 
   <div class="layout">
-    <!-- ritual -->
-    <div class="col left">
-      <div class="board">
-        <div class="grid" id="grid"></div>
-        <div id="flourishHost"></div>
-      </div>
+    <div class="col">
+      <div class="grid" id="grid"></div>
       <div class="readout">
         <div class="ro"><div class="lbl">속성</div><div class="val el" id="roEl">—</div></div>
         <div class="ro"><div class="lbl">power</div><div class="val" id="roPow">—</div></div>
       </div>
-      <div class="controls">
-        <button class="cast" id="cast">✦ 시전</button>
-        <button class="ghost" id="clear">지우기</button>
-      </div>
+      <div class="controls"><button class="ghost" id="clear">문양 지우기</button></div>
       <div class="msg" id="msg"></div>
+      <div class="grimoire" id="grimoire"></div>
     </div>
 
-    <!-- seals -->
-    <div class="panel" id="sealPanel">
-      <h2>🔒 봉인 <span class="cnt" id="sealCnt"></span></h2>
-      <div class="cap">힘을 모아 일곱 봉인을 풀어라. 각 봉인은 특정 <b>속성</b>과 <b>power</b>의 룬을 요구한다.</div>
-      <div id="seals"></div>
-    </div>
+    <div class="col"><div class="roomwrap"><canvas class="room" id="room" width="520" height="520"></canvas></div></div>
 
-    <!-- grimoire -->
-    <div class="panel">
-      <h2>📖 그리모어</h2>
-      <div class="gstats" id="gstats"></div>
-      <div class="runes" id="runes"></div>
-      <button class="share" id="share">🔮 그리모어 공유</button>
-      <div class="world" id="world"></div>
-      <button class="reset" id="reset">초기화</button>
+    <div class="col combos">
+      <div class="panel">
+        <h2>📖 발견한 마법 <span class="cnt" id="spellCnt"></span></h2>
+        <div style="font-size:11px;color:var(--muted)">격자에 그려 처음 시전하면 마법으로 등록된다.</div>
+      </div>
+      <div class="panel">
+        <h2>⚗️ 조합 <span class="cnt" id="comboCnt"></span></h2>
+        <div class="clist" id="clist"></div>
+      </div>
     </div>
   </div>
-
-  <footer>research prototype · 그려서 발견하라 → 소유하라 → 보여줘라</footer>
-</div>
-
-<div class="awaken" id="awaken">
-  <div class="big">✦ 각성 ✦</div>
-  <div class="t" id="awakenT"></div>
-  <button class="cast" id="awakenClose">계속</button>
+  <footer>research prototype · 화이트룸에서 마법을 시전하고, 섞어라</footer>
 </div>
 
 <script>
 "use strict";
 // ════════════════════════════════════════════════════════════════════
-// 마법진 — the grid is a language. A glyph's GEOMETRY deterministically
-// yields its element + power; its exact form hashes to a unique name,
-// color and rarity. New glyphs join your grimoire; their power breaks
-// Seals; and the first person ever to draw a glyph owns it worldwide.
+// 마법진 — draw a glyph (geometry → element + power), cast it into a
+// bright WHITE ROOM as a particle effect. Particles obey element physics
+// and INTERACT: cast a 2nd element onto active particles to discover a
+// reaction. Wind is a real force field, so fire+wind spreads emergently.
 // ════════════════════════════════════════════════════════════════════
 
-// ---- Supabase (rune registry; publishable key, RLS-gated RPC) ----
-const SB_URL='https://idgglxgnviovwrwlmgjr.supabase.co';
-const SB_KEY='sb_publishable_6Kxa6qylzE_naz-4oAUivQ_yTYFGDJX';
-const REST=SB_URL+'/rest/v1';
-function voterId(){
-  let v=localStorage.getItem('funlab:voter_id');
-  if(!v){v=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'v'+Date.now()+Math.random().toString(36).slice(2);
-    localStorage.setItem('funlab:voter_id',v);}
-  return v;
-}
-const VOTER=voterId();
-async function claimRune(r){
-  try{
-    const res=await fetch(REST+'/rpc/claim_rune',{method:'POST',
-      headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},
-      body:JSON.stringify({p_glyph:r.glyph,p_name:r.name,p_element:r.element,p_power:r.power,p_rarity:r.rarity,p_voter:VOTER})});
-    if(!res.ok)throw 0;
-    return (await res.json())[0]||null;   // {is_first, first_voter, cast_count, total_runes}
-  }catch(e){return null;}
-}
-async function worldTotal(){
-  try{const r=await fetch(REST+'/magic_runes?select=glyph',{headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,Prefer:'count=exact',Range:'0-0'}});
-    const cr=r.headers.get('content-range');return cr?parseInt(cr.split('/')[1],10):null;}catch(e){return null;}
-}
-
-// ---- grid model (5x5, index = r*5+c) ----
-const LEY=new Set([6,8,12,16,18]);            // hidden power nodes
-const rc=i=>[Math.floor(i/5),i%5];
-const idx=(r,c)=>r*5+c;
-const PRIMES=new Set([2,3,5,7,11,13,17,19,23]);
-
-const ELEMENTS={
-  '빛':  {hue:45, cores:['첨탑','광휘','성좌','후광','정오','백야','등불','면류관','새벽별','서광']},
-  '번개':{hue:264,cores:['뇌전','첨두','폭풍','섬광','천둥','벼락','질풍','창','우레','번개']},
-  '해류':{hue:175,cores:['해일','심연','만조','물결','소용돌이','해류','폭포','이슬','강어귀','수평선']},
-  '결계':{hue:122,cores:['성채','봉인','결','둘레','미궁','고리','방벽','옹이','둥지','닻']},
-  '불꽃':{hue:16, cores:['잿불','화염','불사조','낙인','모닥불','용광로','도깨비불','섬화','잔불','화신']},
-  '혼돈':{hue:326,cores:['균열','뒤틀림','공허','미혹','소음','얼룩','변덕','뒤엉킴','그림자','무']},
-};
-const MODS=['검은','새벽의','무너진','태초의','끝없는','잊혀진','피어나는','산산조각난','고요한','울부짖는','일곱번째','은빛','비틀린','영원한','깨어나는','잠든','메아리치는','핏빛','서리맺힌','황혼의','부서진','머나먼'];
-
-function hash32(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
-
-// analyze a lit set -> geometric features + element + power
+// ---- glyph grammar (element + power from shape) ----
+const LEY=new Set([6,8,12,16,18]);
+const rc=i=>[Math.floor(i/5),i%5], idx=(r,c)=>r*5+c;
 function analyze(lit){
-  const cells=[...lit].sort((a,b)=>a-b);
-  const n=cells.length;
-  if(!n)return null;
-  let minR=9,maxR=-1,minC=9,maxC=-1;
-  const set=new Set(cells);
+  const cells=[...lit].sort((a,b)=>a-b);const n=cells.length;if(!n)return null;
+  let minR=9,maxR=-1,minC=9,maxC=-1;const set=new Set(cells);
   cells.forEach(i=>{const[r,c]=rc(i);minR=Math.min(minR,r);maxR=Math.max(maxR,r);minC=Math.min(minC,c);maxC=Math.max(maxC,c);});
   const h=maxR-minR+1,w=maxC-minC+1;
-  // symmetry over the 5x5 frame
   const symV=cells.every(i=>{const[r,c]=rc(i);return set.has(idx(r,4-c));});
   const symH=cells.every(i=>{const[r,c]=rc(i);return set.has(idx(4-r,c));});
   const symD=cells.every(i=>{const[r,c]=rc(i);return set.has(idx(c,r));});
   const rot4=cells.every(i=>{const[r,c]=rc(i);return set.has(idx(c,4-r));});
-  // enclosed empty cells (holes): flood empties from the border
   const empty=new Set();for(let i=0;i<25;i++)if(!set.has(i))empty.add(i);
-  const reach=new Set();const st=[];
+  const reach=new Set(),st=[];
   for(let i=0;i<25;i++){const[r,c]=rc(i);if((r===0||r===4||c===0||c===4)&&empty.has(i)){reach.add(i);st.push(i);}}
-  while(st.length){const i=st.pop();const[r,c]=rc(i);
-    [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([nr,nc])=>{if(nr<0||nc<0||nr>4||nc>4)return;const j=idx(nr,nc);if(empty.has(j)&&!reach.has(j)){reach.add(j);st.push(j);}});}
+  while(st.length){const i=st.pop();const[r,c]=rc(i);[[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([nr,nc])=>{if(nr<0||nc<0||nr>4||nc>4)return;const j=idx(nr,nc);if(empty.has(j)&&!reach.has(j)){reach.add(j);st.push(j);}});}
   const holes=[...empty].filter(i=>!reach.has(i)).length;
-  // 4-connectivity of the lit set
-  let connected=true;{const seen=new Set([cells[0]]);const q=[cells[0]];
-    while(q.length){const i=q.pop();const[r,c]=rc(i);[[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([nr,nc])=>{if(nr<0||nc<0||nr>4||nc>4)return;const j=idx(nr,nc);if(set.has(j)&&!seen.has(j)){seen.add(j);q.push(j);}});}
-    connected=seen.size===n;}
   let ley=0;LEY.forEach(i=>{if(set.has(i))ley++;});
-
-  // element — read off the dominant geometric trait (priority order = the grammar)
+  let connected=true;{const seen=new Set([cells[0]]),q=[cells[0]];while(q.length){const i=q.pop();const[r,c]=rc(i);[[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([nr,nc])=>{if(nr<0||nc<0||nr>4||nc>4)return;const j=idx(nr,nc);if(set.has(j)&&!seen.has(j)){seen.add(j);q.push(j);}});}connected=seen.size===n;}
   let element;
-  if(holes>0) element='결계';              // encloses empty space → ward
-  else if(h-w>=2) element='번개';          // tall → storm  (directional beats symmetry)
-  else if(w-h>=2) element='해류';          // wide → tide
-  else if(rot4||(symV&&symH)) element='빛'; // square & symmetric → radial light
-  else if(symD) element='불꽃';            // diagonal lean → flame
-  else element='혼돈';                     // formless → chaos
-
-  // power — structure pays off
-  let power=n;
-  if(symV)power+=2;if(symH)power+=2;if(symD)power+=1;if(rot4)power+=4;
-  power+=holes*3;power+=ley*2;
-  if(connected&&n>=3)power+=3;
-
-  return {cells,n,h,w,symV,symH,symD,rot4,holes,ley,connected,element,power};
+  if(holes>0) element='바위';
+  else if(h-w>=2) element='벼락';
+  else if(w-h>=2) element='물결';
+  else if(rot4||(symV&&symH)) element='빛';
+  else if(symD) element='바람';
+  else element='불꽃';
+  let power=n;if(symV)power+=2;if(symH)power+=2;if(symD)power+=1;if(rot4)power+=4;power+=holes*3;power+=ley*2;if(connected&&n>=3)power+=3;
+  return {cells,element,power};
 }
+const ELHUE={'불꽃':18,'물결':205,'바람':150,'벼락':265,'바위':30,'빛':48};
 
-function rarityOf(score){
-  if(score>=34)return{t:'신화',k:'mythic'};
-  if(score>=26)return{t:'전설',k:'legendary'};
-  if(score>=18)return{t:'희귀',k:'rare'};
-  if(score>=11)return{t:'비범',k:'uncommon'};
-  return{t:'흔함',k:'common'};
+// ---- white room canvas ----
+const cv=document.getElementById('room'),ctx=cv.getContext('2d');
+let W=0,H=0,DPR=1,FLOOR=0;
+function fit(){DPR=Math.max(1,Math.min(2.5,window.devicePixelRatio||1));const css=cv.getBoundingClientRect().width;cv.width=Math.round(css*DPR);cv.height=Math.round(css*DPR);W=cv.width;H=cv.height;FLOOR=H*0.84;}
+window.addEventListener('resize',fit);
+
+// ---- particles + gusts ----
+const P=[];           // particles
+const G=[];           // wind gust force fields
+const MAXP=1400;
+function add(p){if(P.length<MAXP)P.push(p);}
+const rnd=(a,b)=>a+Math.random()*(b-a);
+
+function emit(el,x,y,power){
+  const k=8+power*2;                          // count scales with power
+  const sc=DPR;
+  if(el==='불꽃'){
+    for(let i=0;i<k;i++)add({el,x:x+rnd(-6,6)*sc,y:y+rnd(-4,4)*sc,vx:rnd(-.5,.5)*sc,vy:rnd(-1.6,-.6)*sc,life:rnd(40,80),max:80,r:rnd(4,9)*sc,hue:rnd(12,40)});
+  }else if(el==='물결'){
+    for(let i=0;i<k;i++)add({el,x:x+rnd(-5,5)*sc,y:y,vx:rnd(-1.6,1.6)*sc,vy:rnd(-3.2,-1.4)*sc,life:rnd(50,90),max:90,r:rnd(3,6)*sc,hue:rnd(195,215)});
+  }else if(el==='벼락'){
+    bolt(x,y,power);for(let i=0;i<k;i++)add({el,x,y,vx:rnd(-3,3)*sc,vy:rnd(-3,1)*sc,life:rnd(10,22),max:22,r:rnd(2,4)*sc,hue:rnd(255,280)});
+  }else if(el==='바람'){
+    const dir=rnd(0,Math.PI*2),fx=Math.cos(dir),fy=Math.sin(dir);
+    G.push({x,y,r:(70+power*8)*sc,fx:fx*.5*sc,fy:fy*.5*sc,life:46});
+    for(let i=0;i<k*2;i++)add({el,x:x+rnd(-10,10)*sc,y:y+rnd(-10,10)*sc,vx:fx*rnd(2,5)*sc+rnd(-1,1),vy:fy*rnd(2,5)*sc+rnd(-1,1),life:rnd(20,40),max:40,r:rnd(2,5)*sc,hue:150});
+  }else if(el==='바위'){
+    for(let i=0;i<k;i++)add({el,x:x+rnd(-8,8)*sc,y:y+rnd(-8,8)*sc,vx:rnd(-2,2)*sc,vy:rnd(-3.5,-1)*sc,life:rnd(70,130),max:130,r:rnd(4,9)*sc,hue:rnd(25,38),rock:true});
+  }else if(el==='빛'){
+    for(let i=0;i<k;i++){const a=rnd(0,Math.PI*2),sp=rnd(1,3.5)*sc;add({el,x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:rnd(40,70),max:70,r:rnd(3,7)*sc,hue:rnd(42,54)});}
+    add({el,x,y,vx:0,vy:0,life:34,max:34,r:6*sc,hue:48,ring:true});
+  }
 }
-// full rune identity from an analysis
-function identify(a){
-  const glyph=a.cells.join(',');
-  const hsh=hash32(glyph);
-  const el=ELEMENTS[a.element];
-  const core=el.cores[(hsh>>>5)%el.cores.length];
-  const mod=MODS[hsh%MODS.length];
-  const name=mod+' · '+core;
-  const hue=(el.hue + ((hsh>>>11)%31) - 15 + 360)%360;
-  const color='hsl('+hue+',82%,66%)';
-  const glow='hsla('+hue+',82%,60%,.6)';
-  const rscore=a.power+(a.rot4?6:0)+((a.symV&&a.symH)?4:0)+(a.holes>0?3:0)+(PRIMES.has(a.n)?2:0);
-  const rar=rarityOf(rscore);
-  return {glyph,name,element:a.element,power:a.power,rarity:rar.t,rk:rar.k,color,glow};
+function bolt(x,y,power){
+  // a jagged lightning streak from the top to the cast point
+  const segs=[];let px=x+rnd(-30,30)*DPR,py=0;
+  while(py<y){const ny=py+rnd(14,30)*DPR;const nx=px+rnd(-22,22)*DPR;segs.push([px,py,nx,ny]);px=nx;py=ny;}
+  flashes.push({segs,life:10,max:10,w:(1.5+power*0.15)*DPR});
 }
+const flashes=[];
 
-// ---- the seven seals ----
-const SEALS=[
-  {el:null, pow:3,  name:'첫 봉인',    hint:'무엇이든 — 일단 그려 시전하라'},
-  {el:'해류',pow:6,  name:'둘째 봉인',  hint:'넓게 가로지르는 형태 (해류)'},
-  {el:'번개',pow:8,  name:'셋째 봉인',  hint:'높이 솟은 형태 (번개)'},
-  {el:'결계',pow:10, name:'넷째 봉인',  hint:'빈 곳을 감싸 닫아라 (결계)'},
-  {el:'불꽃',pow:12, name:'다섯째 봉인',hint:'대각선으로 기운 형태 (불꽃)'},
-  {el:'빛',  pow:15, name:'여섯째 봉인',hint:'사방으로 대칭인 형태 (빛)'},
-  {el:'빛',  pow:20, name:'마지막 봉인',hint:'완전한 대칭, 거대한 빛 (빛 20+)'},
-];
-function meets(rune,seal){return (seal.el===null||rune.element===seal.el)&&rune.power>=seal.pow;}
+// ---- reactions: cast B onto A's particles ----
+const REACT={ // key "A+B" (sorted) -> {name, fx}
+  '물결+불꽃':{name:'증기',fx:steam},
+  '바람+불꽃':{name:'화염폭풍',fx:firestorm},
+  '벼락+불꽃':{name:'폭발',fx:explode},
+  '물결+벼락':{name:'감전',fx:shock},
+  '물결+바람':{name:'비',fx:rainspread},
+  '바람+바위':{name:'모래폭풍',fx:duststorm},
+};
+const discovered=new Set(JSON.parse(localStorage.getItem('funlab:magic:combos')||'[]'));
+function reactKey(a,b){return [a,b].sort().join('+');}
+function tryReact(el,x,y,power){
+  const r2=(80+power*6)*DPR, r2sq=r2*r2;
+  const hits={};
+  for(const p of P){if(p.el===el)continue;const dx=p.x-x,dy=p.y-y;if(dx*dx+dy*dy<r2sq){const key=reactKey(el,p.el);if(REACT[key]){(hits[key]=hits[key]||[]).push(p);}}}
+  let any=null;
+  for(const key in hits){const rx=REACT[key];rx.fx(x,y,power,hits[key]);any=key;
+    if(!discovered.has(key)){discovered.add(key);localStorage.setItem('funlab:magic:combos',JSON.stringify([...discovered]));renderCombos();
+      setMsg(`<span class="hot">⚗️ 새 조합 발견 — ${rx.name}!</span>`);}
+  }
+  return any;
+}
+function steam(x,y,pw,parts){parts.forEach(p=>{p.life=Math.min(p.life,4);for(let i=0;i<2;i++)add({el:'증기',x:p.x,y:p.y,vx:rnd(-.6,.6),vy:rnd(-1.4,-.4)*DPR,life:rnd(50,90),max:90,r:rnd(6,12)*DPR,hue:0,steam:true});});}
+function firestorm(x,y,pw,parts){parts.forEach(p=>{p.vx*=1.6;p.vy-=rnd(.5,1.5)*DPR;p.life+=20;});for(let i=0;i<14;i++)add({el:'불꽃',x:x+rnd(-30,30)*DPR,y:y+rnd(-20,20)*DPR,vx:rnd(-2,2)*DPR,vy:rnd(-2.5,-1)*DPR,life:rnd(50,90),max:90,r:rnd(5,10)*DPR,hue:rnd(10,36)});}
+function explode(x,y,pw,parts){parts.forEach(p=>p.life=Math.min(p.life,3));for(let i=0;i<40;i++){const a=rnd(0,6.28),sp=rnd(3,9)*DPR;add({el:'불꽃',x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:rnd(20,40),max:40,r:rnd(3,8)*DPR,hue:rnd(8,40)});}flashes.push({segs:[],life:8,max:8,burst:[x,y,(60+pw*8)*DPR]});}
+function shock(x,y,pw,parts){parts.forEach(p=>{for(let i=0;i<2;i++)add({el:'벼락',x:p.x,y:p.y,vx:rnd(-2,2)*DPR,vy:rnd(-2,2)*DPR,life:rnd(8,16),max:16,r:rnd(2,4)*DPR,hue:270});p.hue=270;});}
+function rainspread(x,y,pw,parts){for(let i=0;i<24;i++)add({el:'물결',x:x+rnd(-60,60)*DPR,y:y-rnd(20,80)*DPR,vx:rnd(-.4,.4),vy:rnd(1,3)*DPR,life:rnd(40,80),max:80,r:rnd(2,4)*DPR,hue:205});}
+function duststorm(x,y,pw,parts){for(let i=0;i<24;i++)add({el:'바람',x:x+rnd(-40,40)*DPR,y:y+rnd(-40,40)*DPR,vx:rnd(2,6)*DPR,vy:rnd(-1,1)*DPR,life:rnd(30,60),max:60,r:rnd(3,7)*DPR,hue:34});}
 
-// ---- persistence ----
-const LS_G='funlab:magic:grimoire', LS_S='funlab:magic:seals';
-function loadG(){try{const v=JSON.parse(localStorage.getItem(LS_G));return Array.isArray(v)?v:[];}catch(e){return[];}}
-function saveG(){localStorage.setItem(LS_G,JSON.stringify(grimoire));}
-let grimoire=loadG();                          // [{glyph,name,element,power,rarity,rk,color,first}]
-let grimSet=new Set(grimoire.map(r=>r.glyph));
-let sealsBroken=Math.max(0,Math.min(7,parseInt(localStorage.getItem(LS_S)||'0',10)||0));
-function saveSeals(){localStorage.setItem(LS_S,String(sealsBroken));}
+// ---- update + render ----
+function step(){
+  // gusts
+  for(let i=G.length-1;i>=0;i--){const g=G[i];g.life--;if(g.life<=0)G.splice(i,1);}
+  // particles
+  for(let i=P.length-1;i>=0;i--){
+    const p=P[i];
+    // gust force
+    for(const g of G){const dx=p.x-g.x,dy=p.y-g.y;if(dx*dx+dy*dy<g.r*g.r){p.vx+=g.fx;p.vy+=g.fy;}}
+    if(p.el==='불꽃'){p.vy-=0.04*DPR;p.vx+=rnd(-.15,.15)*DPR;p.vx*=.99;}
+    else if(p.el==='물결'){p.vy+=0.16*DPR;p.vx*=.99;}
+    else if(p.el==='바위'){p.vy+=0.2*DPR;p.vx*=.96;}
+    else if(p.el==='바람'){p.vx*=.97;p.vy*=.97;}
+    else if(p.el==='벼락'){p.vy+=0.1*DPR;}
+    else if(p.el==='빛'){p.vx*=.95;p.vy*=.95;}
+    else if(p.el==='증기'){p.vy-=0.02*DPR;p.vx+=rnd(-.1,.1);}
+    p.x+=p.vx;p.y+=p.vy;p.life--;
+    // floor interaction
+    if(p.y>FLOOR){
+      if(p.el==='물결'){p.life=Math.min(p.life,3);}      // splash
+      else if(p.el==='바위'){p.y=FLOOR;p.vy=0;p.vx*=.5;} // settle
+      else if(p.y>H){P.splice(i,1);continue;}
+    }
+    if(p.life<=0||p.x< -40||p.x>W+40){P.splice(i,1);}
+  }
+  // flashes
+  for(let i=flashes.length-1;i>=0;i--){flashes[i].life--;if(flashes[i].life<=0)flashes.splice(i,1);}
+}
+function draw(){
+  // room background (bright clean chamber)
+  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#f6f2ea');g.addColorStop(.82,'#e9e3d6');g.addColorStop(.83,'#d8cfbd');g.addColorStop(1,'#cabfa8');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // faint floor grid
+  ctx.strokeStyle='rgba(120,105,80,.10)';ctx.lineWidth=1;ctx.beginPath();
+  for(let x=0;x<=W;x+=W/10){ctx.moveTo(x,FLOOR);ctx.lineTo(W/2+(x-W/2)*0.4,H);}
+  for(let y=FLOOR;y<=H;y+=(H-FLOOR)/4){ctx.moveTo(0,y);ctx.lineTo(W,y);}ctx.stroke();
+  // vignette
+  const vg=ctx.createRadialGradient(W/2,H*.42,W*.2,W/2,H*.5,W*.72);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(40,30,15,.16)');
+  ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
 
-// ---- DOM ----
-const gridEl=document.getElementById('grid');
-const msgEl=document.getElementById('msg');
-const flourishHost=document.getElementById('flourishHost');
-const roEl=document.getElementById('roEl'), roPow=document.getElementById('roPow');
-const castBtn=document.getElementById('cast');
+  for(const p of P){
+    const a=Math.max(0,Math.min(1,p.life/p.max));
+    if(p.el==='바위'){ctx.globalAlpha=a;ctx.fillStyle=`hsl(${p.hue},28%,42%)`;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,6.28);ctx.fill();}
+    else if(p.el==='증기'){ctx.globalAlpha=a*.5;ctx.fillStyle='rgba(225,225,230,1)';ctx.beginPath();ctx.arc(p.x,p.y,p.r*(2-a),0,6.28);ctx.fill();}
+    else{
+      const sat=p.el==='물결'?75:p.el==='벼락'?90:p.el==='빛'?90:88;
+      const li=p.el==='벼락'?70:p.el==='빛'?60:54;
+      // soft outer glow + bright core
+      ctx.globalAlpha=a*.35;ctx.fillStyle=`hsl(${p.hue},${sat}%,${li}%)`;ctx.beginPath();ctx.arc(p.x,p.y,p.r*1.8,0,6.28);ctx.fill();
+      ctx.globalAlpha=a;ctx.fillStyle=`hsl(${p.hue},${sat}%,${Math.min(72,li+14)}%)`;ctx.beginPath();ctx.arc(p.x,p.y,p.r*0.7,0,6.28);ctx.fill();
+    }
+  }
+  ctx.globalAlpha=1;
+  // lightning flashes
+  for(const f of flashes){
+    const a=f.life/f.max;
+    if(f.burst){const[bx,by,br]=f.burst;ctx.globalAlpha=a*.5;const rg=ctx.createRadialGradient(bx,by,0,bx,by,br*(1.2-a));rg.addColorStop(0,'rgba(255,200,120,.9)');rg.addColorStop(1,'rgba(255,120,40,0)');ctx.fillStyle=rg;ctx.beginPath();ctx.arc(bx,by,br*(1.2-a),0,6.28);ctx.fill();}
+    if(f.segs&&f.segs.length){ctx.globalAlpha=a;ctx.strokeStyle='rgba(120,90,255,.95)';ctx.lineWidth=f.w;ctx.shadowColor='rgba(150,120,255,.9)';ctx.shadowBlur=12;ctx.beginPath();f.segs.forEach(s=>{ctx.moveTo(s[0],s[1]);ctx.lineTo(s[2],s[3]);});ctx.stroke();ctx.shadowBlur=0;}
+  }
+  ctx.globalAlpha=1;
+}
+function frame(){step();draw();requestAnimationFrame(frame);}
 
-let lit=new Set(), busy=false;
+// ---- cast into the room ----
+let lit=new Set(),cur=null;
+function roomXY(e){const r=cv.getBoundingClientRect();return [(e.clientX-r.left)/r.width*W,(e.clientY-r.top)/r.height*H];}
+cv.addEventListener('pointerdown',e=>{e.preventDefault();const a=analyze(lit);if(!a){setMsg('<span class="dim">먼저 왼쪽에 <b>문양</b>을 그려라</span>');return;}
+  const[x,y]=roomXY(e);
+  const reacted=tryReact(a.element,x,y,a.power);
+  emit(a.element,x,y,a.power);
+  registerSpell(a);
+  if(!reacted)setMsg(`<b style="color:hsl(${ELHUE[a.element]},80%,60%)">${a.element}</b> <span class="dim">시전 (power ${a.power})</span>`);
+});
+
+// ---- ritual grid draw ----
+const gridEl=document.getElementById('grid'),msgEl=document.getElementById('msg');
+const roEl=document.getElementById('roEl'),roPow=document.getElementById('roPow');
 const cellEls=[];
-for(let i=0;i<25;i++){
-  const d=document.createElement('div');d.className='cell'+(LEY.has(i)?' ley':'');d.dataset.i=i;
-  gridEl.appendChild(d);cellEls.push(d);
-}
+for(let i=0;i<25;i++){const d=document.createElement('div');d.className='cell'+(LEY.has(i)?' ley':'');d.dataset.i=i;gridEl.appendChild(d);cellEls.push(d);}
+let painting=false,paintOn=true,stroke=new Set();
+function cellAt(x,y){const el=document.elementFromPoint(x,y);return (el&&el.classList.contains('cell'))?+el.dataset.i:-1;}
+function paint(i){if(i<0||stroke.has(i))return;stroke.add(i);if(paintOn)lit.add(i);else lit.delete(i);cellEls[i].classList.toggle('on',lit.has(i));readout();}
+gridEl.addEventListener('pointerdown',e=>{e.preventDefault();const i=cellAt(e.clientX,e.clientY);if(i<0)return;painting=true;paintOn=!lit.has(i);stroke=new Set();paint(i);gridEl.setPointerCapture(e.pointerId);});
+gridEl.addEventListener('pointermove',e=>{if(painting)paint(cellAt(e.clientX,e.clientY));});
+gridEl.addEventListener('pointerup',()=>painting=false);gridEl.addEventListener('pointercancel',()=>painting=false);
+document.getElementById('clear').addEventListener('click',()=>{lit.clear();cellEls.forEach(c=>c.classList.remove('on'));readout();});
+function readout(){cur=analyze(lit);if(!cur){roEl.textContent='—';roEl.style.removeProperty('--ec');roPow.textContent='—';cellEls.forEach(c=>c.style.removeProperty('--ec'));return;}
+  const hue=ELHUE[cur.element];roEl.textContent=cur.element;roEl.style.setProperty('--ec',`hsl(${hue},80%,62%)`);roPow.textContent=cur.power;
+  cellEls.forEach((c,i)=>{if(lit.has(i)){c.style.setProperty('--ec',`hsl(${hue},80%,60%)`);c.style.setProperty('--eg',`hsla(${hue},80%,55%,.5)`);}else c.style.removeProperty('--ec');});}
 
-// ---- drag-to-paint drawing (mouse + touch, via elementFromPoint) ----
-let painting=false, paintOn=true, stroke=new Set();
-function cellAt(x,y){const el=document.elementFromPoint(x,y);if(el&&el.classList.contains('cell'))return +el.dataset.i;return -1;}
-function applyPaint(i){
-  if(i<0||stroke.has(i))return;stroke.add(i);
-  if(paintOn)lit.add(i);else lit.delete(i);
-  cellEls[i].classList.toggle('on',lit.has(i));
-  cellEls[i].classList.remove('reveal');
-  refreshReadout();
-}
-gridEl.addEventListener('pointerdown',e=>{
-  if(busy)return;e.preventDefault();
-  const i=cellAt(e.clientX,e.clientY);if(i<0)return;
-  painting=true;paintOn=!lit.has(i);stroke=new Set();applyPaint(i);
-  gridEl.setPointerCapture(e.pointerId);
-});
-gridEl.addEventListener('pointermove',e=>{if(!painting||busy)return;applyPaint(cellAt(e.clientX,e.clientY));});
-function endPaint(){painting=false;}
-gridEl.addEventListener('pointerup',endPaint);
-gridEl.addEventListener('pointercancel',endPaint);
+// ---- spell grimoire (discovered glyphs) ----
+const spells=JSON.parse(localStorage.getItem('funlab:magic:spells')||'[]'); // [{glyph,element,power}]
+const spellSet=new Set(spells.map(s=>s.glyph));
+function registerSpell(a){const glyph=a.cells.join(',');if(spellSet.has(glyph))return;spellSet.add(glyph);spells.unshift({glyph,element:a.element,power:a.power});
+  localStorage.setItem('funlab:magic:spells',JSON.stringify(spells));renderSpells();}
+const grimEl=document.getElementById('grimoire'),spellCntEl=document.getElementById('spellCnt');
+function renderSpells(){grimEl.innerHTML='';spells.slice(0,18).forEach(s=>{const on=new Set(s.glyph.split(',').map(Number));const d=document.createElement('div');d.className='rune';d.style.setProperty('--rc',`hsl(${ELHUE[s.element]},80%,62%)`);
+  let h='';for(let i=0;i<25;i++)h+=`<i class="${on.has(i)?'l':''}"></i>`;d.innerHTML=h;d.title=`${s.element} · power ${s.power}`;
+  d.addEventListener('click',()=>{lit=new Set([...on]);cellEls.forEach((c,i)=>c.classList.toggle('on',on.has(i)));readout();setMsg('<span class="dim">불러옴 — <b>화이트룸</b>을 클릭해 시전</span>');});
+  grimEl.appendChild(d);});spellCntEl.textContent=spells.length;}
 
-function clearGrid(){lit.clear();cellEls.forEach(c=>c.classList.remove('on','reveal'));refreshReadout();}
-
-function refreshReadout(){
-  const a=analyze(lit);
-  if(!a){roEl.textContent='—';roEl.style.removeProperty('--ec');roPow.textContent='—';
-    cellEls.forEach(c=>c.style.removeProperty('--ec'));castBtn.disabled=false;return;}
-  const hue=ELEMENTS[a.element].hue;
-  roEl.textContent=a.element;roEl.style.setProperty('--ec','hsl('+hue+',80%,66%)');
-  roPow.textContent=a.power;
-  // tint lit cells toward the live element color
-  const ec='hsl('+hue+',80%,62%)', eg='hsla('+hue+',80%,55%,.55)';
-  cellEls.forEach((c,i)=>{if(lit.has(i)){c.style.setProperty('--ec',ec);c.style.setProperty('--eg',eg);}else c.style.removeProperty('--ec');});
-}
-
-// ---- cast ----
-castBtn.addEventListener('click',cast);
-document.getElementById('clear').addEventListener('click',()=>{if(!busy){clearGrid();idleMsg();}});
-
-function cast(){
-  if(busy)return;
-  const a=analyze(lit);
-  if(!a){setMsg('<span class="dim">빈 마법진엔 아무 일도 없다…</span>');return;}
-  busy=true;castBtn.disabled=true;gridEl.classList.add('charging');
-  setMsg('<span class="dim">기운을 모은다…</span>');
-  setTimeout(()=>{gridEl.classList.remove('charging');resolve(a);busy=false;castBtn.disabled=false;},460);
-}
-
-function resolve(a){
-  const rune=identify(a);
-  const known=grimSet.has(rune.glyph);
-  // reveal glow in the rune's color
-  a.cells.forEach(i=>{cellEls[i].style.setProperty('--spell',rune.color);cellEls[i].classList.add('reveal');});
-  setTimeout(()=>a.cells.forEach(i=>cellEls[i].classList.remove('reveal')),1500);
-  flourish(rune, known);
-
-  if(known){
-    const ex=grimoire.find(r=>r.glyph===rune.glyph);
-    setMsg(`<span class="dim">이미 아는 룬 —</span> <b style="color:${rune.color}">${rune.name}</b> <span class="dim">(${rune.element} · power ${rune.power} · ${rune.rarity})</span>`);
-    trySeal(rune);
-  }else{
-    grimoire.unshift({...rune,first:null});grimSet.add(rune.glyph);saveG();
-    renderGrimoire(rune.glyph);
-    setMsg(`<span class="hot">✦ 발견! ✦</span> <b style="color:${rune.color}">${rune.name}</b><br><span class="warm">${rune.element} · power ${rune.power} · <b>${rune.rarity}</b></span>`);
-    trySeal(rune);
-    // claim worldwide (async, best-effort)
-    claimRune(rune).then(row=>{
-      if(!row)return;
-      const r=grimoire.find(x=>x.glyph===rune.glyph);if(r){r.first=row.is_first;saveG();}
-      renderGrimoire();
-      const tail=row.is_first
-        ? ` <span class="hot">— 세계 최초 발견! ✦</span>`
-        : ` <span class="dim">— 이 룬을 발견한 ${row.cast_count}번째 마법사</span>`;
-      msgEl.innerHTML+=tail;
-      const wf=flourishHost.querySelector('.wf');
-      if(wf)wf.textContent=row.is_first?'✦ 세계 최초 발견 ✦':row.cast_count+'번째 발견';
-    });
-  }
-}
-
-function trySeal(rune){
-  if(sealsBroken>=7)return;
-  const seal=SEALS[sealsBroken];
-  if(meets(rune,seal)){
-    sealsBroken++;saveSeals();renderSeals();
-    setTimeout(()=>{
-      msgEl.innerHTML+=` <span class="hot">— ${seal.name} 해제!</span>`;
-      if(sealsBroken>=7)awaken();
-    },700);
-  }
-}
-
-// ---- flourish over the board ----
-function flourish(rune, known){
-  const f=document.createElement('div');f.className='flourish';f.style.setProperty('--spell',rune.color);
-  f.innerHTML=`<div class="rar">${rune.rarity}</div><div class="name">${rune.name}</div>`+
-              (known?'':`<div class="wf">…</div>`);
-  flourishHost.appendChild(f);setTimeout(()=>f.remove(),2050);
-}
-
-// ---- seals render ----
-const sealsEl=document.getElementById('seals'), sealCntEl=document.getElementById('sealCnt');
-function renderSeals(){
-  sealsEl.innerHTML='';
-  SEALS.forEach((s,i)=>{
-    const state=i<sealsBroken?'broken':(i===sealsBroken?'active':'locked');
-    const el=ELEMENTS[s.el]?'hsl('+ELEMENTS[s.el].hue+',80%,66%)':'var(--amber)';
-    const req=(s.el?`<span style="color:${el}">${s.el}</span> · `:'')+`power ${s.pow}+`;
-    const d=document.createElement('div');d.className='seal '+state;
-    d.innerHTML=`<div class="r1"><div class="sn">${s.name}</div><div class="req">${state==='broken'?'✓':req}</div></div>`+
-                (state==='active'?`<div class="ht">${s.hint}</div>`:'');
-    sealsEl.appendChild(d);
-  });
-  sealCntEl.textContent=`${sealsBroken}/7`;
-}
-
-// ---- grimoire render ----
-const runesEl=document.getElementById('runes'), gstatsEl=document.getElementById('gstats');
-function miniHTML(glyph,color){
-  const on=new Set(glyph.split(',').map(Number));
-  let h='';for(let i=0;i<25;i++)h+=`<i class="${on.has(i)?'l':''}"></i>`;
-  return `<div class="mini" style="--rc:${color}">${h}</div>`;
-}
-function renderGrimoire(justGlyph){
-  runesEl.innerHTML='';
-  if(!grimoire.length){runesEl.innerHTML='<div class="empty">아직 발견한 룬이 없다.<br>중앙에서 시작해 칸을 이어 그려보라.</div>';}
-  grimoire.forEach(r=>{
-    const d=document.createElement('div');d.className='rune r-'+r.rk;
-    d.innerHTML=miniHTML(r.glyph,r.color)+
-      `<div class="rn" style="color:${r.color}">${r.name}</div>`+
-      `<div class="meta">${r.element} · <span class="pw">${r.power}</span></div>`+
-      `<div class="meta">${r.rarity}</div>`+
-      (r.first?`<div class="wfstar" title="세계 최초 발견">✦</div>`:'');
-    runesEl.appendChild(d);
-  });
-  const wf=grimoire.filter(r=>r.first).length;
-  const best=grimoire.reduce((m,r)=>r.power>(m?m.power:-1)?r:m,null);
-  gstatsEl.innerHTML=`<span>발견 <b>${grimoire.length}</b></span><span>세계최초 <b>${wf}</b></span><span>봉인 <b>${sealsBroken}/7</b></span>`+
-    (best?`<span>최강 <b style="color:${best.color}">${best.power}</b></span>`:'');
-}
-
-// ---- share ----
-const shareBtn=document.getElementById('share');
-shareBtn.addEventListener('click',()=>{
-  const wf=grimoire.filter(r=>r.first).length;
-  const best=grimoire.reduce((m,r)=>r.power>(m?m.power:-1)?r:m,null);
-  const text=`🔮 마법진 — 룬 ${grimoire.length}개 발견`+
-    (wf?` (세계 최초 ${wf})`:'')+` · 봉인 ${sealsBroken}/7`+
-    (best?` · 최강: ${best.name} (${best.rarity}, power ${best.power})`:'')+` — funlab.sprited.ai/games/magic/`;
-  const done=()=>{shareBtn.classList.add('copied');shareBtn.textContent='✓ 복사됨';
-    setTimeout(()=>{shareBtn.classList.remove('copied');shareBtn.textContent='🔮 그리모어 공유';},1600);};
-  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(done,()=>fallback(text,done));
-  else fallback(text,done);
-});
-function fallback(text,done){const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
-  document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done();}catch(e){}ta.remove();}
-
-// ---- reset ----
-document.getElementById('reset').addEventListener('click',()=>{
-  if(!confirm('그리모어와 봉인을 초기화할까? 발견 기록이 사라진다. (세계 레지스트리는 남는다)'))return;
-  grimoire=[];grimSet=new Set();saveG();sealsBroken=0;saveSeals();clearGrid();renderSeals();renderGrimoire();idleMsg();
-});
-
-// ---- awakening ----
-function awaken(){
-  const wf=grimoire.filter(r=>r.first).length;
-  document.getElementById('awakenT').innerHTML=`일곱 봉인이 모두 풀렸다. 당신은 <b>대마법사</b>가 되었다.<br>룬 ${grimoire.length}개 발견${wf?` · 그중 ${wf}개는 세계 최초`:''}.<br>이제 그리모어를 채워 진정한 컬렉션을 완성하라.`;
-  document.getElementById('awaken').classList.add('show');
-}
-document.getElementById('awakenClose').addEventListener('click',()=>document.getElementById('awaken').classList.remove('show'));
-
-// ---- messages ----
-function setMsg(html){msgEl.innerHTML=html;}
-function idleMsg(){
-  if(!grimoire.length)setMsg('<span class="dim">중앙에서 시작해 칸을 <b>이어 그려</b>보라 — 드래그로도 그릴 수 있다.</span>');
-  else setMsg('<span class="dim">활성 봉인은 <b>'+SEALS[Math.min(sealsBroken,6)].hint.replace(/\s*\(.*\)/,'')+'</b>을 원한다.</span>');
-}
+// ---- combos panel ----
+const clistEl=document.getElementById('clist'),comboCntEl=document.getElementById('comboCnt');
+function renderCombos(){clistEl.innerHTML='';const keys=Object.keys(REACT);keys.forEach(k=>{const got=discovered.has(k);const[a,b]=k.split('+');const d=document.createElement('div');d.className='citem'+(got?'':' locked');
+  d.innerHTML=got?`<b>${a}</b> <span class="ar">+</span> <b>${b}</b> <span class="ar">→</span> <b>${REACT[k].name}</b>`:`?? <span class="ar">+</span> ?? <span class="ar">→</span> ???`;clistEl.appendChild(d);});
+  comboCntEl.textContent=`${discovered.size}/${keys.length}`;}
+function setMsg(h){msgEl.innerHTML=h;}
 
 // ---- init ----
-renderSeals();renderGrimoire();idleMsg();refreshReadout();
-worldTotal().then(t=>{if(t!=null)document.getElementById('world').textContent=`세계에 지금까지 ${t.toLocaleString()}개의 룬이 발견됨`;});
+fit();renderSpells();renderCombos();readout();
+setMsg('<span class="dim">중앙에서 칸을 <b>이어 그려</b> 보라 — 모양이 곧 마법이다</span>');
+requestAnimationFrame(frame);
 </script>
 </body>
 </html>
