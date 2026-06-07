@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>러시아워 · Rush Hour</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12; --gap:12px;
+  }
+  @media (max-width:380px){ :root{ --gap:10px; } }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 12px;text-align:center;min-width:62px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted);line-height:1.4}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .ghost{background:transparent;color:var(--ink);border:1px solid var(--line);font-weight:700;
+    padding:8px 16px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .ghost:active{transform:scale(.96)}
+
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:1/1;touch-action:none}
+  .bg{position:absolute;inset:var(--gap);display:grid;grid-template-columns:repeat(6,1fr);
+    grid-template-rows:repeat(6,1fr);gap:var(--gap);pointer-events:none}
+  .bg .slot{background:var(--cell);border-radius:8px}
+  .bg .slot.exitrow{background:#2a2113}
+  .cars{position:absolute;inset:var(--gap)}
+  .car{position:absolute;border-radius:10px;cursor:grab;background:var(--c,#b89a6a);
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.16), inset 0 -4px 7px rgba(0,0,0,.30), 0 2px 6px rgba(0,0,0,.38);
+    transition:left .14s cubic-bezier(.4,0,.2,1), top .14s cubic-bezier(.4,0,.2,1);
+    will-change:left,top,transform;touch-action:none}
+  .car::after{content:"";position:absolute;inset:18% 22%;border-radius:5px;
+    background:rgba(255,255,255,.10);pointer-events:none}
+  .car.v::after{inset:22% 18%}
+  .car.red{--c:#e0492a;background:linear-gradient(160deg,#ff7a52,#d63a23)}
+  .car.red::after{background:rgba(255,255,255,.18)}
+  .car.sel{cursor:grabbing;box-shadow:inset 0 2px 0 rgba(255,255,255,.16), inset 0 -4px 7px rgba(0,0,0,.30),
+    0 0 0 2px var(--amber), 0 0 0 5px rgba(255,177,84,.22)}
+  .car.dragging{transition:none;cursor:grabbing;z-index:4}
+  .car.win{transition:transform .34s ease, left .14s, top .14s;z-index:6}
+
+  .exit{position:absolute;display:flex;align-items:center;justify-content:center;
+    color:var(--amber);font-size:22px;font-weight:900;pointer-events:none;z-index:1;
+    text-shadow:0 0 10px rgba(255,177,84,.7)}
+  .exit::before{content:"";position:absolute;left:-2px;top:-6%;height:112%;width:5px;border-radius:3px;
+    background:var(--bg);box-shadow:0 0 12px 3px rgba(255,177,84,.35)}
+
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.88);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:10;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px;min-height:1px}
+  .overlay .row{display:flex;gap:10px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">러시아워<span class="ref">막힌 차를 밀어 빨간 차를 빼낸다 · Rush Hour</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">레벨</div><div class="val" id="level">1</div></div>
+      <div class="box"><div class="lbl">이동</div><div class="val" id="moves">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">차를 눌러 고르고, 축 방향으로 끌기 / 방향키</div>
+    <button class="ghost" id="reset">리셋</button>
+  </div>
+
+  <div class="board" id="board">
+    <div class="bg" id="bg"></div>
+    <div class="cars" id="cars"></div>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <div class="row">
+        <button class="ghost" id="overRetry">다시</button>
+        <button class="restart" id="overNext">다음</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">빨간 차의 길을 막은 건 결국 다른 차들. 한 칸씩 밀어 오른쪽 출구로 빼내라.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const N = 6;
+  const EXIT_ROW = 2;
+  const BEST_KEY = "funlab:rushhour:best";
+
+  // --- levels: each verified solvable by BFS (min moves in comments) -------
+  // x=col 0..5, y=row 0..5. Red 'X' is horizontal len2 on row 2, exits right.
+  const LEVELS = [
+    // L1 · 2 moves
+    [{id:'X',x:0,y:2,len:2,orient:'h',red:true},
+     {id:'A',x:3,y:1,len:2,orient:'v'}],
+    // L2 · 4 moves
+    [{id:'X',x:0,y:2,len:2,orient:'h',red:true},
+     {id:'A',x:4,y:2,len:3,orient:'v'},{id:'B',x:5,y:2,len:2,orient:'v'},
+     {id:'C',x:5,y:4,len:2,orient:'v'},{id:'D',x:4,y:0,len:2,orient:'v'},
+     {id:'E',x:3,y:1,len:2,orient:'v'},{id:'F',x:0,y:3,len:2,orient:'h'},
+     {id:'G',x:1,y:4,len:2,orient:'h'}],
+    // L3 · 7 moves
+    [{id:'X',x:0,y:2,len:2,orient:'h',red:true},
+     {id:'A',x:1,y:4,len:2,orient:'v'},{id:'B',x:4,y:1,len:2,orient:'v'},
+     {id:'C',x:3,y:4,len:3,orient:'h'},{id:'D',x:2,y:1,len:3,orient:'v'},
+     {id:'E',x:0,y:1,len:2,orient:'h'},{id:'F',x:4,y:0,len:2,orient:'h'},
+     {id:'G',x:3,y:5,len:2,orient:'h'},{id:'H',x:3,y:3,len:3,orient:'h'},
+     {id:'I',x:5,y:1,len:2,orient:'v'},{id:'J',x:3,y:0,len:2,orient:'v'}],
+    // L4 · 10 moves
+    [{id:'X',x:1,y:2,len:2,orient:'h',red:true},
+     {id:'A',x:5,y:1,len:2,orient:'v'},{id:'B',x:3,y:2,len:2,orient:'v'},
+     {id:'C',x:3,y:4,len:3,orient:'h'},{id:'D',x:2,y:1,len:3,orient:'h'},
+     {id:'E',x:1,y:5,len:3,orient:'h'},{id:'F',x:0,y:4,len:2,orient:'v'},
+     {id:'G',x:2,y:3,len:2,orient:'v'},{id:'H',x:0,y:1,len:2,orient:'h'}],
+    // L5 · 15 moves
+    [{id:'X',x:0,y:2,len:2,orient:'h',red:true},
+     {id:'A',x:3,y:5,len:3,orient:'h'},{id:'B',x:0,y:0,len:2,orient:'v'},
+     {id:'C',x:1,y:1,len:2,orient:'h'},{id:'D',x:4,y:1,len:2,orient:'v'},
+     {id:'E',x:3,y:2,len:3,orient:'v'},{id:'F',x:5,y:0,len:3,orient:'v'},
+     {id:'G',x:4,y:4,len:2,orient:'h'},{id:'H',x:2,y:3,len:2,orient:'v'},
+     {id:'I',x:0,y:4,len:2,orient:'v'},{id:'J',x:4,y:3,len:2,orient:'h'}],
+    // L6 · 25 moves
+    [{id:'X',x:2,y:2,len:2,orient:'h',red:true},
+     {id:'A',x:4,y:0,len:3,orient:'v'},{id:'B',x:4,y:4,len:2,orient:'h'},
+     {id:'C',x:0,y:3,len:2,orient:'h'},{id:'D',x:0,y:4,len:2,orient:'v'},
+     {id:'E',x:2,y:4,len:2,orient:'v'},{id:'F',x:3,y:3,len:2,orient:'v'},
+     {id:'G',x:5,y:2,len:2,orient:'v'},{id:'H',x:0,y:1,len:3,orient:'h'},
+     {id:'I',x:3,y:0,len:2,orient:'v'},{id:'J',x:3,y:5,len:2,orient:'h'}]
+  ];
+  const TOTAL = LEVELS.length;
+
+  const PALETTE = ['#c9a25e','#a98c63','#94a07a','#7f93a0','#b08a6e',
+                   '#8a8f9c','#bd9a70','#9c8a72','#86a08f','#a8896e','#7e96a8'];
+
+  // --- elements ---------------------------------------------------------
+  const boardEl  = document.getElementById("board");
+  const bgEl     = document.getElementById("bg");
+  const carsEl   = document.getElementById("cars");
+  const levelEl  = document.getElementById("level");
+  const movesEl  = document.getElementById("moves");
+  const bestEl   = document.getElementById("best");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+
+  // background slots (tint the exit lane)
+  for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+    const s=document.createElement("div");
+    s.className="slot"+(r===EXIT_ROW?" exitrow":"");
+    bgEl.appendChild(s);
+  }
+  // exit marker on the right of the exit row
+  const exitEl=document.createElement("div");
+  exitEl.className="exit";
+  exitEl.textContent="›";
+  exitEl.style.left=`calc(100% + var(--gap) * 0.25)`;
+  exitEl.style.top=`calc(${EXIT_ROW} * (100% + var(--gap)) / ${N})`;
+  exitEl.style.height=`calc((100% - ${N-1} * var(--gap)) / ${N})`;
+  exitEl.style.width=`calc(var(--gap) + 6px)`;
+  carsEl.appendChild(exitEl);
+
+  // --- state ------------------------------------------------------------
+  let cars=[];          // {id,x,y,len,orient,red,el}
+  let levelIdx=0;
+  let moves=0;
+  let selected=null;
+  let solved=false;
+  let best=loadBest();  // {cleared, l1}
+  let drag=null;
+
+  function loadBest(){
+    try{
+      const raw=localStorage.getItem(BEST_KEY);
+      if(!raw) return {cleared:0,l1:null};
+      const o=JSON.parse(raw);
+      return {cleared:o.cleared|0, l1:(o.l1==null?null:o.l1|0)};
+    }catch(e){ return {cleared:0,l1:null}; }
+  }
+  function saveBest(){ localStorage.setItem(BEST_KEY, JSON.stringify(best)); }
+
+  // --- geometry helpers (responsive, percent-based) ---------------------
+  const STRIDE = `(100% + var(--gap)) / ${N}`;
+  function spanCalc(L){ return `calc((${L} * 100% + ${L-N} * var(--gap)) / ${N})`; }
+  function setRect(el,v){
+    el.style.left=`calc(${v.x} * ${STRIDE})`;
+    el.style.top =`calc(${v.y} * ${STRIDE})`;
+    if(v.orient==='h'){ el.style.width=spanCalc(v.len); el.style.height=spanCalc(1); }
+    else              { el.style.width=spanCalc(1);     el.style.height=spanCalc(v.len); }
+  }
+  function gapPx(){ return parseFloat(getComputedStyle(boardEl).getPropertyValue("--gap"))||12; }
+  function stridePx(){
+    const g=gapPx();
+    const inner=boardEl.getBoundingClientRect().width - 2*g; // cars container width
+    return (inner + g)/N;
+  }
+
+  // --- occupancy / sliding ---------------------------------------------
+  function buildOcc(exclude){
+    const g=Array.from({length:N},()=>Array(N).fill(false));
+    for(const c of cars){
+      if(c===exclude) continue;
+      for(let k=0;k<c.len;k++){
+        const x=c.orient==='h'?c.x+k:c.x, y=c.orient==='v'?c.y+k:c.y;
+        g[y][x]=true;
+      }
+    }
+    return g;
+  }
+  // how many cells a car may slide: {min<=0, max>=0}
+  function slideRange(car){
+    const occ=buildOcc(car);
+    let min=0,max=0;
+    if(car.orient==='h'){
+      const y=car.y;
+      for(let x=car.x-1;x>=0 && !occ[y][x];x--) min--;
+      for(let x=car.x+car.len;x<N && !occ[y][x];x++) max++;
+    } else {
+      const x=car.x;
+      for(let y=car.y-1;y>=0 && !occ[y][x];y--) min--;
+      for(let y=car.y+car.len;y<N && !occ[y][x];y++) max++;
+    }
+    return {min,max};
+  }
+
+  // --- rendering --------------------------------------------------------
+  function loadLevel(idx){
+    levelIdx=((idx % TOTAL)+TOTAL)%TOTAL;
+    moves=0; selected=null; solved=false; drag=null;
+    // clear cars (keep exit element)
+    [...carsEl.querySelectorAll(".car")].forEach(el=>el.remove());
+    cars = LEVELS[levelIdx].map((v,i)=>{
+      const c={...v};
+      const el=document.createElement("div");
+      el.className="car"+(c.orient==='v'?" v":"")+(c.red?" red":"");
+      if(!c.red) el.style.setProperty("--c", PALETTE[(i-1+PALETTE.length)%PALETTE.length]);
+      el.style.transition="none";
+      setRect(el,c);
+      carsEl.appendChild(el);
+      c.el=el;
+      return c;
+    });
+    // re-enable transitions next frame
+    void carsEl.offsetWidth;
+    cars.forEach(c=>{ c.el.style.transition=""; });
+    overlay.classList.remove("show");
+    updateHud();
+  }
+
+  function updateHud(){
+    levelEl.textContent = (levelIdx+1);
+    movesEl.textContent = moves;
+    bestEl.textContent  = best.cleared;
+  }
+
+  function select(car){
+    if(selected===car) return;
+    if(selected) selected.el.classList.remove("sel");
+    selected=car;
+    if(selected) selected.el.classList.add("sel");
+  }
+
+  // --- pointer drag (mouse + touch unified) -----------------------------
+  carsEl.addEventListener("pointerdown", e=>{
+    if(solved) return;
+    const el=e.target.closest(".car");
+    if(!el){ select(null); return; }
+    const car=cars.find(c=>c.el===el);
+    if(!car) return;
+    select(car);
+    const range=slideRange(car);
+    drag={ car, stride:stridePx(), min:range.min, max:range.max,
+           sx:e.clientX, sy:e.clientY, delta:0 };
+    el.classList.add("dragging");
+    try{ carsEl.setPointerCapture(e.pointerId); }catch(_){}
+    e.preventDefault();
+  });
+  carsEl.addEventListener("pointermove", e=>{
+    if(!drag) return;
+    const along = drag.car.orient==='h' ? (e.clientX-drag.sx) : (e.clientY-drag.sy);
+    const lo=drag.min*drag.stride, hi=drag.max*drag.stride;
+    const d=Math.max(lo, Math.min(hi, along));
+    drag.delta=d;
+    drag.car.el.style.transform = drag.car.orient==='h'
+      ? `translateX(${d}px)` : `translateY(${d}px)`;
+  });
+  function endDrag(){
+    if(!drag) return;
+    const d=drag; drag=null;
+    const el=d.car.el;
+    el.classList.remove("dragging");
+    let cells=Math.round(d.delta/d.stride);
+    cells=Math.max(d.min, Math.min(d.max, cells));
+    el.style.transition="none";
+    el.style.transform="";
+    if(cells!==0){
+      if(d.car.orient==='h') d.car.x+=cells; else d.car.y+=cells;
+      moves++; updateHud();
+    }
+    setRect(el,d.car);
+    void el.offsetWidth;
+    el.style.transition="";
+    if(cells!==0) checkWin();
+  }
+  carsEl.addEventListener("pointerup", endDrag);
+  carsEl.addEventListener("pointercancel", endDrag);
+
+  // --- keyboard (slide selected car one cell along its axis) ------------
+  window.addEventListener("keydown", e=>{
+    if(solved || !selected || drag) return;
+    const k=e.key;
+    const car=selected;
+    let step=0;
+    if(car.orient==='h'){
+      if(k==='ArrowLeft'||k==='a'||k==='A'||k==='h') step=-1;
+      else if(k==='ArrowRight'||k==='d'||k==='D'||k==='l') step=1;
+      else return;
+    } else {
+      if(k==='ArrowUp'||k==='w'||k==='W'||k==='k') step=-1;
+      else if(k==='ArrowDown'||k==='s'||k==='S'||k==='j') step=1;
+      else return;
+    }
+    e.preventDefault();
+    const r=slideRange(car);
+    if(step<0 && r.min<=-1){ if(car.orient==='h') car.x--; else car.y--; }
+    else if(step>0 && r.max>=1){ if(car.orient==='h') car.x++; else car.y++; }
+    else return; // blocked
+    moves++; updateHud();
+    setRect(car.el,car);
+    checkWin();
+  });
+
+  // --- win --------------------------------------------------------------
+  function checkWin(){
+    const red=cars.find(c=>c.red);
+    if(!red || solved) return;
+    if(red.x+red.len-1 !== N-1) return;
+    solved=true;
+    // record best
+    const cleared=Math.max(best.cleared, levelIdx+1);
+    let newL1=false;
+    if(levelIdx===0){
+      if(best.l1==null || moves<best.l1){ best.l1=moves; newL1=true; }
+    }
+    best.cleared=cleared;
+    saveBest();
+    updateHud();
+    // slide the red car out the exit, then show overlay
+    red.el.classList.add("win");
+    red.el.style.transition="transform .34s ease";
+    red.el.style.transform="translateX(135%)";
+    const last=(levelIdx===TOTAL-1);
+    setTimeout(()=>{
+      overMsg.innerHTML=`레벨 ${levelIdx+1} 클리어 · 이동 <b>${moves}</b>`;
+      let small;
+      if(newL1) small="레벨 1 최소 이동 신기록.";
+      else if(levelIdx===0 && best.l1!=null) small=`레벨 1 최소 기록 ${best.l1}.`;
+      else if(last) small="여기까지 다 깼다. 처음부터 더 적게 가능?";
+      else small="다음 길은 더 빡빡하다.";
+      overSmall.textContent=small;
+      document.getElementById("overNext").textContent = last ? "처음으로" : "다음";
+      overlay.classList.add("show");
+    }, 360);
+  }
+
+  // --- buttons ----------------------------------------------------------
+  document.getElementById("reset").addEventListener("click", ()=>loadLevel(levelIdx));
+  document.getElementById("overRetry").addEventListener("click", ()=>loadLevel(levelIdx));
+  document.getElementById("overNext").addEventListener("click", ()=>loadLevel(levelIdx+1));
+
+  // --- go ---------------------------------------------------------------
+  updateHud();
+  loadLevel(0);
+  window.addEventListener("resize", ()=>{ /* layout is percent-based; nothing to recompute */ });
+})();
+</script>
+</body>
+</html>

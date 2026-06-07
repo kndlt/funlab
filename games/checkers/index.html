@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>체커 · Checkers</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:1/1;touch-action:none;overflow:hidden}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:pointer}
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">체커<span class="ref">뛰어넘어 잡고, 끝줄에서 왕이 된다 · Checkers</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">연승</div><div class="val" id="streak">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint" id="hint">말을 눌러 이동</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <canvas id="cv"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">잡을 수 있으면 반드시 잡는다. 연쇄로 더 잡고, 끝줄에 닿으면 왕이 되어 뒤로도 간다.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const N = 8;
+  const BEST_KEY = "funlab:checkers:best";
+  const SEARCH_DEPTH = 6;
+  const SEG_MS = 130;
+
+  // board: flat 64. 0 empty | 1 player man | 2 player king | -1 AI man | -2 AI king
+  // player sits at bottom (rows 5-7), moves UP (toward row 0), crowns at row 0.
+  // AI sits at top (rows 0-2), moves DOWN (toward row 7), crowns at row 7.
+
+  const boardEl  = document.getElementById("board");
+  const cv       = document.getElementById("cv");
+  const ctx      = cv.getContext("2d");
+  const streakEl = document.getElementById("streak");
+  const bestEl   = document.getElementById("best");
+  const hintEl   = document.getElementById("hint");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+
+  let board;            // committed state
+  let turn;             // 'player' | 'ai'
+  let state;            // 'play' | 'over'
+  let selected;         // idx or null
+  let legal;            // legal moves from selected
+  let anim;             // active animation or null
+  let streak = 0;
+  let best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  // --- pixel sizing -----------------------------------------------------
+  let px = 0;
+  function resize(){
+    const rect = boardEl.getBoundingClientRect();
+    const dpr  = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const size = Math.round(rect.width * dpr);
+    cv.width  = size; cv.height = size;
+    px = size / N;
+  }
+  window.addEventListener("resize", resize);
+
+  // --- rules ------------------------------------------------------------
+  function pieceDirs(v){
+    const king = Math.abs(v) === 2;
+    if(king) return [[-1,-1],[-1,1],[1,-1],[1,1]];
+    return v > 0 ? [[-1,-1],[-1,1]] : [[1,-1],[1,1]];
+  }
+
+  // maximal capture sequences from one square (forced & must be completed)
+  function captureMovesFrom(b, idx){
+    const out = [];
+    const startSide = Math.sign(b[idx]);
+    function recurse(bb, pos, path, caps){
+      const v = bb[pos];
+      const pr = pos >> 3, pc = pos & 7;
+      const dirs = pieceDirs(v);
+      let any = false;
+      for(const [dr,dc] of dirs){
+        const mr = pr+dr, mc = pc+dc, lr = pr+2*dr, lc = pc+2*dc;
+        if(lr<0||lr>7||lc<0||lc>7) continue;
+        const midIdx = mr*8+mc, landIdx = lr*8+lc;
+        const mid = bb[midIdx];
+        if(mid !== 0 && Math.sign(mid) === -startSide && bb[landIdx] === 0){
+          any = true;
+          const nb = bb.slice();
+          nb[pos] = 0; nb[midIdx] = 0;
+          let nv = v, promo = false;
+          if(Math.abs(v) === 1){
+            if(startSide > 0 && lr === 0){ nv = 2; promo = true; }
+            else if(startSide < 0 && lr === 7){ nv = -2; promo = true; }
+          }
+          nb[landIdx] = nv;
+          const npath = path.concat(landIdx);
+          const ncaps = caps.concat(midIdx);
+          if(promo) out.push({from:idx, path:npath, caps:ncaps});
+          else recurse(nb, landIdx, npath, ncaps);
+        }
+      }
+      if(!any && path.length > 0) out.push({from:idx, path:path.slice(), caps:caps.slice()});
+    }
+    recurse(b, idx, [], []);
+    return out;
+  }
+
+  function generateMoves(b, side){
+    const caps = [];
+    for(let i=0;i<64;i++){
+      if(b[i] !== 0 && Math.sign(b[i]) === side){
+        const cm = captureMovesFrom(b, i);
+        for(const m of cm) caps.push(m);
+      }
+    }
+    if(caps.length) return caps;              // forced capture
+    const moves = [];
+    for(let i=0;i<64;i++){
+      if(b[i] === 0 || Math.sign(b[i]) !== side) continue;
+      const pr = i >> 3, pc = i & 7;
+      for(const [dr,dc] of pieceDirs(b[i])){
+        const r2 = pr+dr, c2 = pc+dc;
+        if(r2<0||r2>7||c2<0||c2>7) continue;
+        const j = r2*8+c2;
+        if(b[j] === 0) moves.push({from:i, path:[j], caps:[]});
+      }
+    }
+    return moves;
+  }
+
+  function applyMove(b, m){
+    const nb = b.slice();
+    let v = nb[m.from];
+    nb[m.from] = 0;
+    for(const cap of m.caps) nb[cap] = 0;
+    const dest = m.path[m.path.length-1];
+    const dr = dest >> 3, side = Math.sign(v);
+    if(Math.abs(v) === 1){
+      if(side > 0 && dr === 0) v = 2;
+      else if(side < 0 && dr === 7) v = -2;
+    }
+    nb[dest] = v;
+    return nb;
+  }
+
+  // --- AI: minimax + alpha-beta (player-positive evaluation) ------------
+  function evaluate(b){
+    let s = 0;
+    for(let i=0;i<64;i++){
+      const v = b[i]; if(v === 0) continue;
+      const r = i >> 3;
+      if(v === 1)       s += 100 + (7-r)*4;
+      else if(v === 2)  s += 175;
+      else if(v === -1) s -= 100 + r*4;
+      else if(v === -2) s -= 175;
+    }
+    return s;
+  }
+
+  function search(b, depth, alpha, beta, side){
+    if(depth === 0) return evaluate(b);
+    const moves = generateMoves(b, side);
+    if(!moves.length) return side > 0 ? -100000 : 100000; // side to move loses
+    if(side > 0){
+      let bestv = -Infinity;
+      for(const m of moves){
+        const v = search(applyMove(b,m), depth-1, alpha, beta, -1);
+        if(v > bestv) bestv = v;
+        if(bestv > alpha) alpha = bestv;
+        if(alpha >= beta) break;
+      }
+      return bestv;
+    } else {
+      let bestv = Infinity;
+      for(const m of moves){
+        const v = search(applyMove(b,m), depth-1, alpha, beta, 1);
+        if(v < bestv) bestv = v;
+        if(bestv < beta) beta = bestv;
+        if(alpha >= beta) break;
+      }
+      return bestv;
+    }
+  }
+
+  function aiChooseMove(){
+    const moves = generateMoves(board, -1);
+    if(!moves.length) return null;
+    // shuffle for variety among equal lines
+    for(let i=moves.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [moves[i],moves[j]]=[moves[j],moves[i]]; }
+    let bestVal = Infinity, bestMoves = [], beta = Infinity;
+    for(const m of moves){
+      const v = search(applyMove(board,m), SEARCH_DEPTH-1, -Infinity, beta, 1);
+      if(v < bestVal - 0.5){ bestVal = v; bestMoves = [m]; if(v < beta) beta = v; }
+      else if(Math.abs(v - bestVal) <= 0.5){ bestMoves.push(m); }
+    }
+    return bestMoves[(Math.random()*bestMoves.length)|0];
+  }
+
+  // --- flow -------------------------------------------------------------
+  function init(){
+    resize();
+    board = new Array(64).fill(0);
+    for(let r=0;r<3;r++) for(let c=0;c<8;c++) if((r+c)%2===1) board[r*8+c] = -1;
+    for(let r=5;r<8;r++) for(let c=0;c<8;c++) if((r+c)%2===1) board[r*8+c] = 1;
+    turn = "player";
+    state = "play";
+    selected = null;
+    legal = [];
+    anim = null;
+    overlay.classList.remove("show");
+    hintEl.textContent = "말을 눌러 이동 · 내 차례";
+    updateScores();
+  }
+
+  function updateScores(){
+    streakEl.textContent = streak;
+    bestEl.textContent = best;
+  }
+
+  function startMove(m, nextTurn){
+    const post = applyMove(board, m);
+    anim = {
+      pre: board.slice(), post, move: m,
+      pts: [m.from, ...m.path],
+      start: performance.now(),
+      dur: Math.max(1, m.path.length) * SEG_MS,
+      next: nextTurn
+    };
+    selected = null; legal = [];
+  }
+
+  function advance(nx){
+    turn = nx;
+    const side = nx === "player" ? 1 : -1;
+    const moves = generateMoves(board, side);
+    if(!moves.length){ endGame(nx === "player" ? "lose" : "win"); return; }
+    if(nx === "ai"){
+      hintEl.textContent = "AI 생각 중…";
+      setTimeout(()=>{
+        const m = aiChooseMove();
+        if(!m){ endGame("win"); return; }
+        startMove(m, "player");
+      }, 200);
+    } else {
+      hintEl.textContent = "내 차례 · 말을 눌러 이동";
+    }
+  }
+
+  function endGame(result){
+    state = "over";
+    if(result === "win"){
+      streak += 1;
+      const record = streak > best;
+      if(record){ best = streak; localStorage.setItem(BEST_KEY, String(best)); }
+      overMsg.innerHTML = `승리 · 연승 <b>${streak}</b>`;
+      overSmall.textContent = record ? "최고 연승 경신! 다음 판도 잡아라." : "깔끔하게 정리했다. 이어가자.";
+    } else {
+      const had = streak;
+      streak = 0;
+      overMsg.innerHTML = `패배`;
+      overSmall.textContent = had > 0 ? `연승 ${had} 끊겼다. 다시.` : "AI가 한 수 위였다. 다시.";
+    }
+    updateScores();
+    overlay.classList.add("show");
+  }
+
+  // --- input ------------------------------------------------------------
+  function cellFromEvent(e){
+    const rect = cv.getBoundingClientRect();
+    const cx = (e.clientX - rect.left) / rect.width;
+    const cy = (e.clientY - rect.top) / rect.height;
+    const c = Math.max(0, Math.min(7, Math.floor(cx*8)));
+    const r = Math.max(0, Math.min(7, Math.floor(cy*8)));
+    return r*8 + c;
+  }
+
+  function onClick(e){
+    if(state !== "play" || turn !== "player" || anim) return;
+    const idx = cellFromEvent(e);
+    if(selected !== null){
+      const m = legal.find(mv => mv.path[mv.path.length-1] === idx);
+      if(m){ startMove(m, "ai"); return; }
+    }
+    if(Math.sign(board[idx]) === 1){
+      const mine = generateMoves(board, 1).filter(mv => mv.from === idx);
+      if(mine.length){ selected = idx; legal = mine; }
+      else { selected = null; legal = []; }   // forced-capture: piece can't move
+    } else {
+      selected = null; legal = [];
+    }
+  }
+  cv.addEventListener("click", onClick);
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  // --- rendering --------------------------------------------------------
+  function drawCrown(cx, cy, s, color){
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(cx - s,       cy + s*0.55);
+    ctx.lineTo(cx - s,       cy - s*0.25);
+    ctx.lineTo(cx - s*0.5,   cy + s*0.10);
+    ctx.lineTo(cx,           cy - s*0.55);
+    ctx.lineTo(cx + s*0.5,   cy + s*0.10);
+    ctx.lineTo(cx + s,       cy - s*0.25);
+    ctx.lineTo(cx + s,       cy + s*0.55);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawPiece(cx, cy, v, scale){
+    scale = scale || 1;
+    const rad = px*0.36*scale;
+    const side = Math.sign(v), king = Math.abs(v) === 2;
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.45)";
+    ctx.shadowBlur = px*0.10; ctx.shadowOffsetY = px*0.045;
+    const g = ctx.createRadialGradient(cx-rad*0.3, cy-rad*0.35, rad*0.2, cx, cy, rad);
+    if(side > 0){ g.addColorStop(0,"#ffd9a0"); g.addColorStop(1,"#df671f"); }
+    else        { g.addColorStop(0,"#90805f"); g.addColorStop(1,"#3c3019"); }
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+    ctx.lineWidth = Math.max(1, px*0.035);
+    ctx.strokeStyle = side > 0 ? "rgba(255,224,176,0.92)" : "rgba(169,151,126,0.85)";
+    ctx.beginPath(); ctx.arc(cx, cy, rad*0.76, 0, Math.PI*2); ctx.stroke();
+    if(king) drawCrown(cx, cy, rad*0.44, side > 0 ? "#4a2a0a" : "#f6ead8");
+  }
+
+  function render(now){
+    const W = cv.width;
+    ctx.clearRect(0,0,W,W);
+
+    // squares
+    for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+      const playable = (r+c)%2 === 1;
+      ctx.fillStyle = playable ? "#2c2316" : "#181109";
+      ctx.fillRect(Math.floor(c*px), Math.floor(r*px), Math.ceil(px)+1, Math.ceil(px)+1);
+    }
+
+    // selection + legal destinations
+    if(state === "play" && turn === "player" && !anim && selected !== null){
+      const sr = selected >> 3, sc = selected & 7;
+      ctx.strokeStyle = "rgba(255,177,84,0.95)";
+      ctx.lineWidth = Math.max(2, px*0.06);
+      ctx.strokeRect(sc*px+px*0.06, sr*px+px*0.06, px*0.88, px*0.88);
+      for(const m of legal){
+        const d = m.path[m.path.length-1];
+        const dr = d >> 3, dc = d & 7;
+        const cap = m.caps.length > 0;
+        ctx.beginPath();
+        ctx.arc(dc*px+px/2, dr*px+px/2, px*(cap?0.20:0.15), 0, Math.PI*2);
+        ctx.fillStyle = cap ? "rgba(255,140,70,0.85)" : "rgba(255,177,84,0.55)";
+        ctx.fill();
+      }
+    }
+
+    if(anim){
+      const t = Math.min(1, (now - anim.start) / anim.dur);
+      const segs = anim.pts.length - 1;
+      const fp = t * segs;
+      const seg = Math.min(segs-1, Math.floor(fp));
+      const frac = fp - seg;
+      // static pieces from pre-board, skipping the mover; hide captured passed
+      const moverFrom = anim.move.from;
+      const hidden = new Set();
+      for(let k=0;k<seg;k++) if(anim.move.caps[k] !== undefined) hidden.add(anim.move.caps[k]);
+      // fade out the capture currently being jumped this segment
+      const fadingIdx = anim.move.caps[seg];
+      for(let i=0;i<64;i++){
+        const v = anim.pre[i];
+        if(v === 0 || i === moverFrom || hidden.has(i)) continue;
+        const r = i >> 3, c = i & 7;
+        if(i === fadingIdx){
+          ctx.save(); ctx.globalAlpha = Math.max(0, 1 - frac);
+          drawPiece(c*px+px/2, r*px+px/2, v);
+          ctx.restore();
+        } else {
+          drawPiece(c*px+px/2, r*px+px/2, v);
+        }
+      }
+      // moving piece interpolated
+      const a = anim.pts[seg], b = anim.pts[seg+1];
+      const ar = a >> 3, ac = a & 7, br = b >> 3, bc = b & 7;
+      const mx = (ac + (bc-ac)*frac)*px + px/2;
+      const my = (ar + (br-ar)*frac)*px + px/2;
+      drawPiece(mx, my, anim.pre[moverFrom]);
+
+      if(t >= 1){
+        const nx = anim.next;
+        board = anim.post;
+        anim = null;
+        advance(nx);
+      }
+    } else {
+      for(let i=0;i<64;i++){
+        const v = board[i]; if(v === 0) continue;
+        const r = i >> 3, c = i & 7;
+        drawPiece(c*px+px/2, r*px+px/2, v);
+      }
+    }
+
+    requestAnimationFrame(render);
+  }
+
+  init();
+  requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>

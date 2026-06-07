@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>창고지기 · Sokoban</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 12px;text-align:center;min-width:58px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .btns{display:flex;gap:8px}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .ghost{background:var(--panel);border:1px solid var(--line);color:var(--ink);font-weight:700;
+    padding:8px 14px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .ghost:active{transform:scale(.96)}
+  .ghost:disabled{opacity:.4;cursor:default}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:10px;touch-action:none;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .grid{position:relative;display:grid;gap:0}
+  .cell{position:relative;width:var(--cs);height:var(--cs)}
+  /* floor */
+  .cell.floor::before{content:"";position:absolute;inset:1px;border-radius:4px;
+    background:var(--cell)}
+  /* wall */
+  .cell.wall{background:
+    linear-gradient(#4a3b27,#33281a);border-radius:3px;
+    box-shadow:inset 0 1px 0 rgba(255,222,170,.12), inset 0 -2px 0 rgba(0,0,0,.35)}
+  /* target ring */
+  .cell.target::after{content:"";position:absolute;left:50%;top:50%;
+    width:38%;height:38%;transform:translate(-50%,-50%);border-radius:50%;
+    border:2.5px solid var(--amber);box-shadow:0 0 8px rgba(255,177,84,.35)}
+  /* box (crate) */
+  .crate{position:absolute;inset:9%;border-radius:6px;
+    background:linear-gradient(#caa15f,#8a6a36);
+    box-shadow:inset 0 2px 0 rgba(255,236,200,.35), inset 0 -3px 0 rgba(0,0,0,.3), 0 2px 4px rgba(0,0,0,.4);
+    transition:inset .08s}
+  .crate::before,.crate::after{content:"";position:absolute;background:rgba(60,40,16,.55)}
+  .crate::before{left:50%;top:8%;width:2px;height:84%;transform:translateX(-50%)}
+  .crate::after{top:50%;left:8%;height:2px;width:84%;transform:translateY(-50%)}
+  .crate.on{background:linear-gradient(#ffd99a,#ff9e3d);
+    box-shadow:inset 0 2px 0 rgba(255,248,232,.6), inset 0 -3px 0 rgba(120,60,0,.35), 0 0 12px rgba(255,177,84,.6)}
+  .crate.on::before,.crate.on::after{background:rgba(120,60,0,.5)}
+  /* player */
+  .player{position:absolute;width:var(--cs);height:var(--cs);left:0;top:0;
+    transition:transform .1s linear;z-index:4;pointer-events:none}
+  .player::before{content:"";position:absolute;inset:16%;border-radius:50%;
+    background:radial-gradient(circle at 38% 32%,#ffe6bc,#ffb154 60%,#e87f2c);
+    box-shadow:0 2px 5px rgba(0,0,0,.4), inset 0 0 0 2px rgba(58,35,10,.25)}
+  .player .eye{position:absolute;top:38%;width:11%;height:11%;border-radius:50%;background:#3a230a}
+  .player .eye.l{left:38%}
+  .player .eye.r{right:38%}
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.9);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:8;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .overlay .row{display:flex;gap:10px}
+  /* dpad */
+  .dpad{margin-top:18px;display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(3,56px);
+    gap:8px;justify-content:center}
+  .dpad button{background:var(--panel);border:1px solid var(--line);color:var(--amber);
+    border-radius:12px;font-size:22px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center}
+  .dpad button:active{transform:scale(.93);background:#27201733}
+  .dpad .up{grid-area:1/2} .dpad .left{grid-area:2/1}
+  .dpad .right{grid-area:2/3} .dpad .down{grid-area:3/2}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">창고지기<span class="ref">상자를 밀어 제자리에 놓는다 · Sokoban</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">level</div><div class="val" id="level">1</div></div>
+      <div class="box"><div class="lbl">이동</div><div class="val" id="moves">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">방향키 / WASD / 스와이프</div>
+    <div class="btns">
+      <button class="ghost" id="undo">되돌리기</button>
+      <button class="ghost" id="reset">초기화</button>
+    </div>
+  </div>
+
+  <div class="board" id="board">
+    <div class="grid" id="grid"></div>
+    <div class="player" id="player"><span class="eye l"></span><span class="eye r"></span></div>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <div class="row" id="overRow"></div>
+    </div>
+  </div>
+
+  <div class="dpad">
+    <button class="up" data-dx="0" data-dy="-1">▲</button>
+    <button class="left" data-dx="-1" data-dy="0">◀</button>
+    <button class="right" data-dx="1" data-dy="0">▶</button>
+    <button class="down" data-dx="0" data-dy="1">▼</button>
+  </div>
+
+  <div class="foot">밀 수만 있고, 당길 순 없다. 한 번 구석에 박은 상자는 영영 못 뺀다 — 한 수씩 멀리 봐라.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const BEST_KEY = "funlab:sokoban:best";
+
+  // Hand-designed, known-solvable levels (easy -> hard).
+  // '#'=wall ' '=floor '.'=target '$'=box '*'=box on target '@'=player '+'=player on target
+  const LEVELS = [
+    [
+      "#######",
+      "#  @  #",
+      "#  $  #",
+      "#  .  #",
+      "#######"
+    ],
+    [
+      "########",
+      "#      #",
+      "#@ $  .#",
+      "#      #",
+      "########"
+    ],
+    [
+      "######",
+      "#@   #",
+      "# $  #",
+      "#  . #",
+      "#    #",
+      "######"
+    ],
+    [
+      "#######",
+      "#.    #",
+      "# $   #",
+      "#  @  #",
+      "#   $ #",
+      "#    .#",
+      "#######"
+    ],
+    [
+      "#######",
+      "#. .  #",
+      "# $$  #",
+      "#  @  #",
+      "#  $  #",
+      "#  .  #",
+      "#######"
+    ],
+    [
+      "########",
+      "#      #",
+      "#  $   #",
+      "# $@$  #",
+      "#      #",
+      "# ...  #",
+      "########"
+    ],
+    [
+      "#########",
+      "#.     .#",
+      "# $   $ #",
+      "#   @   #",
+      "# $   $ #",
+      "#.     .#",
+      "#########"
+    ]
+  ];
+
+  const gridEl   = document.getElementById("grid");
+  const boardEl  = document.getElementById("board");
+  const playerEl = document.getElementById("player");
+  const levelEl  = document.getElementById("level");
+  const movesEl  = document.getElementById("moves");
+  const bestEl   = document.getElementById("best");
+  const undoBtn  = document.getElementById("undo");
+  const resetBtn = document.getElementById("reset");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+  const overRow  = document.getElementById("overRow");
+
+  let lvIndex = 0;
+  let rows, cols;
+  let walls;        // Set "x,y"
+  let targets;      // Set "x,y"
+  let boxes;        // Set "x,y"
+  let px, py;       // player position
+  let cells;        // map "x,y" -> {boxNode} for box rendering
+  let moves;
+  let history;      // [{px,py,boxFrom,boxTo}]
+  let best;
+  let solved;       // current level cleared (overlay up)
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  const key = (x,y)=> x+","+y;
+
+  function parseLevel(lines){
+    walls = new Set(); targets = new Set(); boxes = new Set();
+    rows = lines.length;
+    cols = lines.reduce((m,l)=>Math.max(m,l.length),0);
+    for(let y=0;y<rows;y++){
+      const line = lines[y];
+      for(let x=0;x<cols;x++){
+        const c = line[x] || " ";
+        if(c === "#") walls.add(key(x,y));
+        if(c === "." || c === "*" || c === "+") targets.add(key(x,y));
+        if(c === "$" || c === "*") boxes.add(key(x,y));
+        if(c === "@" || c === "+"){ px = x; py = y; }
+      }
+    }
+  }
+
+  function cellSize(){
+    // fit board within stage width, with a sane cap
+    const avail = Math.min(boardEl.clientWidth - 20, 420);
+    const byW = avail / cols;
+    const byH = 360 / rows;
+    return Math.max(20, Math.min(56, Math.floor(Math.min(byW, byH))));
+  }
+
+  function buildGrid(){
+    const cs = cellSize();
+    gridEl.style.setProperty("--cs", cs + "px");
+    gridEl.style.gridTemplateColumns = `repeat(${cols}, var(--cs))`;
+    gridEl.style.gridTemplateRows = `repeat(${rows}, var(--cs))`;
+    gridEl.innerHTML = "";
+    cells = {};
+    for(let y=0;y<rows;y++){
+      for(let x=0;x<cols;x++){
+        const k = key(x,y);
+        const d = document.createElement("div");
+        d.className = "cell";
+        if(walls.has(k)) d.classList.add("wall");
+        else {
+          d.classList.add("floor");
+          if(targets.has(k)) d.classList.add("target");
+        }
+        gridEl.appendChild(d);
+        cells[k] = d;
+      }
+    }
+    renderBoxes();
+    placePlayer(false);
+  }
+
+  function renderBoxes(){
+    // clear existing crates
+    for(const k in cells){
+      const node = cells[k];
+      const crate = node.querySelector(".crate");
+      if(crate) crate.remove();
+    }
+    boxes.forEach(k=>{
+      const node = cells[k];
+      if(!node) return;
+      const c = document.createElement("div");
+      c.className = "crate" + (targets.has(k) ? " on" : "");
+      node.appendChild(c);
+    });
+  }
+
+  function placePlayer(animate){
+    const cs = parseFloat(gridEl.style.getPropertyValue("--cs"));
+    if(!animate) playerEl.style.transition = "none";
+    playerEl.style.transform = `translate(${px*cs}px, ${py*cs}px)`;
+    if(!animate){
+      // force reflow then restore transition
+      void playerEl.offsetWidth;
+      playerEl.style.transition = "";
+    }
+  }
+
+  function updateHud(){
+    levelEl.textContent = lvIndex + 1;
+    movesEl.textContent = moves;
+    bestEl.textContent = best;
+    undoBtn.disabled = history.length === 0;
+  }
+
+  function loadLevel(i){
+    lvIndex = i;
+    parseLevel(LEVELS[i]);
+    moves = 0;
+    history = [];
+    solved = false;
+    overlay.classList.remove("show");
+    buildGrid();
+    updateHud();
+  }
+
+  function isWon(){
+    for(const t of targets){ if(!boxes.has(t)) return false; }
+    return targets.size > 0;
+  }
+
+  function move(dx,dy){
+    if(solved) return;
+    const nx = px+dx, ny = py+dy, nk = key(nx,ny);
+    if(walls.has(nk)) return;
+
+    let boxFrom = null, boxTo = null;
+    if(boxes.has(nk)){
+      const bx = nx+dx, by = ny+dy, bk = key(bx,by);
+      if(walls.has(bk) || boxes.has(bk)) return; // can't push two / into wall
+      boxes.delete(nk); boxes.add(bk);
+      boxFrom = nk; boxTo = bk;
+    }
+
+    history.push({px, py, boxFrom, boxTo});
+    px = nx; py = ny;
+    moves++;
+
+    if(boxFrom) renderBoxes();
+    placePlayer(true);
+    updateHud();
+
+    if(isWon()) onWin();
+  }
+
+  function undo(){
+    if(solved || !history.length) return;
+    const h = history.pop();
+    if(h.boxTo){ boxes.delete(h.boxTo); boxes.add(h.boxFrom); renderBoxes(); }
+    px = h.px; py = h.py;
+    moves = Math.max(0, moves - 1);  // revert the forward move
+    placePlayer(true);
+    updateHud();
+  }
+
+  function onWin(){
+    solved = true;
+    const reached = lvIndex + 1;
+    if(reached > best){ best = reached; localStorage.setItem(BEST_KEY, String(best)); }
+    updateHud();
+
+    overRow.innerHTML = "";
+    const last = lvIndex === LEVELS.length - 1;
+    if(last){
+      overMsg.innerHTML = `완주 · <b>${LEVELS.length}</b>판 정리`;
+      overSmall.textContent = "창고가 깨끗하다. 처음부터 더 적은 수로 도전해 봐라.";
+      const again = mkBtn("처음부터", "restart", ()=>loadLevel(0));
+      overRow.appendChild(again);
+    } else {
+      overMsg.innerHTML = `${lvIndex+1}판 클리어 · <b>${moves}</b>수`;
+      overSmall.textContent = "다음 창고로.";
+      const next = mkBtn("다음", "restart", ()=>loadLevel(lvIndex+1));
+      const redo = mkBtn("다시", "ghost", ()=>loadLevel(lvIndex));
+      overRow.appendChild(next);
+      overRow.appendChild(redo);
+    }
+    overlay.classList.add("show");
+  }
+
+  function mkBtn(label, cls, fn){
+    const b = document.createElement("button");
+    b.className = cls;
+    b.textContent = label;
+    b.addEventListener("click", fn);
+    return b;
+  }
+
+  // --- input ------------------------------------------------------------
+  const KEYMAP = {
+    ArrowLeft:[-1,0], ArrowRight:[1,0], ArrowUp:[0,-1], ArrowDown:[0,1],
+    a:[-1,0], d:[1,0], w:[0,-1], s:[0,1],
+    A:[-1,0], D:[1,0], W:[0,-1], S:[0,1],
+    h:[-1,0], l:[1,0], k:[0,-1], j:[0,1]
+  };
+  window.addEventListener("keydown", e=>{
+    if(e.key === "z" || e.key === "Z" || e.key === "u" || e.key === "U"){ e.preventDefault(); undo(); return; }
+    if(e.key === "r" || e.key === "R"){ e.preventDefault(); loadLevel(lvIndex); return; }
+    const m = KEYMAP[e.key];
+    if(m){ e.preventDefault(); move(m[0], m[1]); }
+  });
+
+  // swipe
+  let tStart = null;
+  boardEl.addEventListener("touchstart", e=>{
+    const t = e.changedTouches[0];
+    tStart = {x:t.clientX, y:t.clientY};
+  }, {passive:true});
+  boardEl.addEventListener("touchend", e=>{
+    if(!tStart) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - tStart.x, dy = t.clientY - tStart.y;
+    const ax = Math.abs(dx), ay = Math.abs(dy);
+    tStart = null;
+    if(Math.max(ax,ay) < 22) return;
+    if(ax > ay) move(dx > 0 ? 1 : -1, 0);
+    else        move(0, dy > 0 ? 1 : -1);
+  }, {passive:true});
+
+  // dpad
+  document.querySelectorAll(".dpad button").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      move(parseInt(b.dataset.dx,10), parseInt(b.dataset.dy,10));
+    });
+  });
+
+  undoBtn.addEventListener("click", undo);
+  resetBtn.addEventListener("click", ()=>loadLevel(lvIndex));
+
+  window.addEventListener("resize", ()=>{ buildGrid(); });
+
+  loadLevel(0);
+})();
+</script>
+</body>
+</html>

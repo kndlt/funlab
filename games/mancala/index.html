@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>만칼라 · Mancala</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:460px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 13px;text-align:center;min-width:64px}
+  .box .lbl{font-size:10px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .hint b{color:var(--amber)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:18px;
+    width:100%;padding:14px;display:flex;gap:10px;align-items:stretch}
+  .pits{flex:1;display:grid;grid-template-columns:repeat(6,1fr);grid-template-rows:1fr 1fr;gap:9px}
+
+  .pit{position:relative;background:var(--cell);border:1px solid var(--line);border-radius:50%;
+    aspect-ratio:1/1;transition:box-shadow .15s,border-color .15s,transform .08s}
+  .pit.mine{border-color:#4a3c28}
+  .pit.active{cursor:pointer}
+  .pit.active:hover{border-color:var(--amber);box-shadow:0 0 0 2px rgba(255,177,84,.25)}
+  .pit.active:active{transform:scale(.95)}
+  .pit.lit{box-shadow:0 0 14px 2px rgba(255,177,84,.6);border-color:var(--amber)}
+
+  .store{position:relative;width:58px;background:var(--cell);border:1px solid var(--line);
+    border-radius:30px;transition:box-shadow .15s,border-color .15s}
+  .store.lit{box-shadow:0 0 16px 2px rgba(255,177,84,.6);border-color:var(--amber)}
+  .store .slabel{position:absolute;top:9px;left:0;right:0;text-align:center;
+    font-size:10px;letter-spacing:1px;color:var(--muted);font-weight:700;text-transform:uppercase}
+
+  .seeds{position:absolute;inset:0;pointer-events:none}
+  .seed{position:absolute;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#ffe0ad,#c8762d)}
+  .badge{position:absolute;pointer-events:none;font-variant-numeric:tabular-nums;font-weight:800;
+    color:var(--cream);text-shadow:0 1px 3px rgba(0,0,0,.7)}
+  .pit .badge{bottom:3px;left:0;right:0;text-align:center;font-size:12px;opacity:.92}
+  .store .badge{bottom:11px;left:0;right:0;text-align:center;font-size:26px}
+
+  .overlay{position:absolute;inset:0;border-radius:18px;background:rgba(20,17,13,.88);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:23px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px;line-height:1.6}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">만칼라<span class="ref">씨앗을 뿌려 내 곳간을 채운다 · Mancala</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">연승</div><div class="val" id="streak">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint" id="hint">내 칸을 눌러 씨앗을 뿌린다</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">아래 여섯 칸이 내 것. 마지막 씨앗이 내 곳간에 떨어지면 한 번 더, 빈 칸에 떨어지면 맞은편을 통째로 가져온다.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // --- board model ------------------------------------------------------
+  // indices 0..5  : player pits (you, bottom row)
+  // index   6     : player store (right)
+  // indices 7..12 : AI pits (top row)
+  // index   13    : AI store (left)
+  // sowing is counterclockwise: 0→1..5→6→7..12→(skip 13)→0...
+  const P_STORE = 6, A_STORE = 13;
+  const BEST_KEY = "funlab:mancala:best";
+  const SOW_MS   = 135;   // per-stone sowing delay
+  const AI_THINK = 430;   // pause before AI acts
+  const DEPTH    = 8;     // minimax search depth
+
+  let board, state, busy, streak, best;
+
+  best   = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+  streak = 0;
+
+  const boardEl   = document.getElementById("board");
+  const overlay   = document.getElementById("overlay");
+  const overMsg   = document.getElementById("overMsg");
+  const overSmall = document.getElementById("overSmall");
+  const hintEl    = document.getElementById("hint");
+  const streakEl  = document.getElementById("streak");
+  const bestEl    = document.getElementById("best");
+
+  const cellEls = new Array(14);
+
+  function delay(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+  // next index when sowing for a given side (skip opponent's store)
+  function nextPit(idx, isPlayer){
+    idx = (idx + 1) % 14;
+    if(isPlayer && idx === A_STORE) idx = 0;      // skip AI store
+    if(!isPlayer && idx === P_STORE) idx = 7;     // skip player store
+    return idx;
+  }
+
+  // --- DOM build --------------------------------------------------------
+  function buildBoard(){
+    boardEl.querySelectorAll(".store,.pits").forEach(n => n.remove());
+
+    const aiStore = mkStore(A_STORE, "AI");
+    const grid    = document.createElement("div");
+    grid.className = "pits";
+
+    const order = [12,11,10,9,8,7, 0,1,2,3,4,5]; // top row then bottom row
+    for(const i of order) grid.appendChild(mkPit(i));
+
+    const myStore = mkStore(P_STORE, "나");
+
+    boardEl.insertBefore(aiStore, overlay);
+    boardEl.insertBefore(grid, overlay);
+    boardEl.insertBefore(myStore, overlay);
+
+    grid.addEventListener("click", onPitClick);
+  }
+
+  function mkPit(i){
+    const el = document.createElement("div");
+    el.className = "pit" + (i <= 5 ? " mine" : "");
+    el.dataset.index = i;
+    el.innerHTML = '<div class="seeds"></div><div class="badge"></div>';
+    cellEls[i] = el;
+    return el;
+  }
+
+  function mkStore(i, label){
+    const el = document.createElement("div");
+    el.className = "store";
+    el.dataset.index = i;
+    el.innerHTML = '<div class="slabel">'+label+'</div><div class="seeds"></div><div class="badge"></div>';
+    cellEls[i] = el;
+    return el;
+  }
+
+  function onPitClick(e){
+    const pit = e.target.closest(".pit.mine");
+    if(!pit) return;
+    takePlayerTurn(+pit.dataset.index);
+  }
+
+  // --- seed scatter (deterministic, organic) ----------------------------
+  const GOLD = 2.399963229728653;
+  function scatter(n){
+    if(n <= 0) return [];
+    if(n === 1) return [[50,50]];
+    const out = [];
+    const radius = Math.min(38, 9 + 4.2*Math.sqrt(n));
+    for(let k=0;k<n;k++){
+      const r = radius * Math.sqrt((k+0.5)/n);
+      const a = k * GOLD;
+      out.push([50 + r*Math.cos(a), 50 + r*Math.sin(a)]);
+    }
+    return out;
+  }
+
+  // --- rendering --------------------------------------------------------
+  function renderCell(i){
+    const el = cellEls[i];
+    const c  = board[i];
+    const isStore = (i === P_STORE || i === A_STORE);
+    const cap = isStore ? 30 : 15;
+    const show = Math.min(c, cap);
+    const seeds = el.querySelector(".seeds");
+    const pos = scatter(show);
+    let html = "";
+    for(let k=0;k<show;k++){
+      html += '<span class="seed" style="left:'+pos[k][0].toFixed(1)+'%;top:'+pos[k][1].toFixed(1)+'%"></span>';
+    }
+    seeds.innerHTML = html;
+    el.querySelector(".badge").textContent = c;
+  }
+
+  function renderAll(){
+    for(let i=0;i<14;i++) renderCell(i);
+    updateTurn();
+  }
+
+  function updateTurn(){
+    const myTurn = (state === "player" && !busy);
+    for(let i=0;i<=5;i++){
+      cellEls[i].classList.toggle("active", myTurn && board[i] > 0);
+    }
+    if(state === "player")      hintEl.innerHTML = "내 차례 — <b>아래 칸</b>을 눌러라";
+    else if(state === "ai")     hintEl.textContent = "AI가 두는 중…";
+    else                        hintEl.textContent = "한 판 끝났다";
+  }
+
+  function updateScores(){
+    streakEl.textContent = streak;
+    bestEl.textContent   = best;
+  }
+
+  function pulse(i){
+    const el = cellEls[i];
+    el.classList.add("lit");
+    setTimeout(() => el.classList.remove("lit"), 200);
+  }
+
+  // --- animated sowing for a real (rendered) move -----------------------
+  async function animSow(pit, isPlayer){
+    let stones = board[pit];
+    board[pit] = 0;
+    renderCell(pit);
+    let idx = pit;
+    while(stones > 0){
+      idx = nextPit(idx, isPlayer);
+      await delay(SOW_MS);
+      board[idx]++;
+      stones--;
+      renderCell(idx);
+      pulse(idx);
+    }
+    return idx;
+  }
+
+  // resolve a move: animate sowing + capture, return whether the mover
+  // earns an extra turn.
+  async function doMove(pit, isPlayer){
+    const last  = await animSow(pit, isPlayer);
+    const store = isPlayer ? P_STORE : A_STORE;
+
+    if(last === store) return true; // landed in own store → extra turn
+
+    const lo = isPlayer ? 0 : 7;
+    const hi = isPlayer ? 5 : 12;
+    if(last >= lo && last <= hi && board[last] === 1){
+      const opp = 12 - last;
+      if(board[opp] > 0){
+        await delay(SOW_MS + 60);
+        board[store] += board[opp] + 1;
+        board[last] = 0;
+        board[opp]  = 0;
+        renderCell(store); renderCell(last); renderCell(opp);
+        pulse(store); pulse(opp);
+      }
+    }
+    return false;
+  }
+
+  // --- end-of-game sweep ------------------------------------------------
+  function sideEmpty(lo, hi){
+    for(let i=lo;i<=hi;i++) if(board[i] > 0) return false;
+    return true;
+  }
+  function isOver(b){
+    let p=0,a=0;
+    for(let i=0;i<=5;i++)  p += b[i];
+    for(let i=7;i<=12;i++) a += b[i];
+    return p === 0 || a === 0;
+  }
+
+  function maybeEnd(){
+    if(!sideEmpty(0,5) && !sideEmpty(7,12)) return false;
+    let p=0, a=0;
+    for(let i=0;i<=5;i++){  p += board[i]; board[i] = 0; }
+    for(let i=7;i<=12;i++){ a += board[i]; board[i] = 0; }
+    board[P_STORE] += p;
+    board[A_STORE] += a;
+    renderAll();
+    finish();
+    return true;
+  }
+
+  function finish(){
+    state = "over";
+    const me = board[P_STORE], ai = board[A_STORE];
+    let small;
+    if(me > ai){
+      streak += 1;
+      if(streak > best){ best = streak; localStorage.setItem(BEST_KEY, String(best)); }
+      small = streak >= 2 ? streak + "연승 중. 멈추지 마라." : "곳간이 더 무겁다. 이겼다.";
+    } else if(me < ai){
+      streak = 0;
+      small = "씨앗을 내줬다. 다시 헤아려라.";
+    } else {
+      streak = 0;
+      small = "한 톨도 안 갈렸다. 무승부.";
+    }
+    updateScores();
+    overMsg.innerHTML = (me > ai ? "이겼다" : me < ai ? "졌다" : "비겼다")
+      + ` · <b>${me}</b> : ${ai}`;
+    overSmall.textContent = small;
+    overlay.classList.add("show");
+    updateTurn();
+  }
+
+  // --- turn flow --------------------------------------------------------
+  async function takePlayerTurn(pit){
+    if(busy || state !== "player") return;
+    if(pit < 0 || pit > 5 || board[pit] === 0) return;
+    busy = true;
+    updateTurn();
+
+    const again = await doMove(pit, true);
+    if(maybeEnd()){ busy = false; return; }
+
+    if(again){
+      busy = false;          // still your turn
+      updateTurn();
+      return;
+    }
+    state = "ai";
+    updateTurn();
+    await aiLoop();
+    busy = false;
+    updateTurn();
+  }
+
+  async function aiLoop(){
+    while(state === "ai"){
+      await delay(AI_THINK);
+      const move = chooseAiMove();
+      if(move < 0){ break; }            // safety; sweep handles empties
+      const again = await doMove(move, false);
+      if(maybeEnd()) return;
+      if(again) continue;               // AI earned another turn
+      state = "player";
+    }
+  }
+
+  // --- AI: minimax with alpha-beta + extra-turn handling ----------------
+  // value is from AI's perspective: AIstore - playerstore (+ light heuristic)
+  function legalMoves(b, isPlayer){
+    const lo = isPlayer ? 0 : 7, hi = isPlayer ? 5 : 12;
+    const m = [];
+    for(let i=lo;i<=hi;i++) if(b[i] > 0) m.push(i);
+    return m;
+  }
+
+  function sweepValue(b){
+    let p=0,a=0;
+    for(let i=0;i<=5;i++)  p += b[i];
+    for(let i=7;i<=12;i++) a += b[i];
+    return (b[A_STORE] + a) - (b[P_STORE] + p);
+  }
+
+  function evaluate(b){
+    if(isOver(b)) return sweepValue(b) * 10; // decisive terminal weight
+    let pSide=0, aSide=0;
+    for(let i=0;i<=5;i++)  pSide += b[i];
+    for(let i=7;i<=12;i++) aSide += b[i];
+    return (b[A_STORE] - b[P_STORE]) * 10 + (aSide - pSide);
+  }
+
+  // apply a single move to a cloned board (no animation)
+  function simMove(b, pit, isPlayer){
+    const out = b.slice();
+    let stones = out[pit];
+    out[pit] = 0;
+    let idx = pit;
+    while(stones > 0){ idx = nextPit(idx, isPlayer); out[idx]++; stones--; }
+    const store = isPlayer ? P_STORE : A_STORE;
+    let again = false;
+    if(idx === store){
+      again = true;
+    } else {
+      const lo = isPlayer ? 0 : 7, hi = isPlayer ? 5 : 12;
+      if(idx >= lo && idx <= hi && out[idx] === 1){
+        const opp = 12 - idx;
+        if(out[opp] > 0){ out[store] += out[opp] + 1; out[idx] = 0; out[opp] = 0; }
+      }
+    }
+    return { b: out, again };
+  }
+
+  function minimax(b, isPlayerTurn, depth, alpha, beta){
+    if(depth <= 0 || isOver(b)) return evaluate(b);
+    const moves = legalMoves(b, isPlayerTurn);
+    if(!moves.length) return evaluate(b);
+
+    if(!isPlayerTurn){ // AI maximizes
+      let best = -Infinity;
+      for(const m of moves){
+        const { b:nb, again } = simMove(b, m, false);
+        const v = isOver(nb) ? evaluate(nb)
+                : minimax(nb, again ? false : true, depth-1, alpha, beta);
+        if(v > best) best = v;
+        if(best > alpha) alpha = best;
+        if(alpha >= beta) break;
+      }
+      return best;
+    } else {           // player minimizes (from AI's view)
+      let best = Infinity;
+      for(const m of moves){
+        const { b:nb, again } = simMove(b, m, true);
+        const v = isOver(nb) ? evaluate(nb)
+                : minimax(nb, again ? true : false, depth-1, alpha, beta);
+        if(v < best) best = v;
+        if(best < beta) beta = best;
+        if(alpha >= beta) break;
+      }
+      return best;
+    }
+  }
+
+  function chooseAiMove(){
+    const moves = legalMoves(board, false);
+    if(!moves.length) return -1;
+    let bestMove = moves[0], bestVal = -Infinity;
+    for(const m of moves){
+      const { b:nb, again } = simMove(board, m, false);
+      const v = isOver(nb) ? evaluate(nb)
+              : minimax(nb, again ? false : true, DEPTH-1, -Infinity, Infinity);
+      if(v > bestVal){ bestVal = v; bestMove = m; }
+    }
+    return bestMove;
+  }
+
+  // --- lifecycle --------------------------------------------------------
+  function init(){
+    board = [4,4,4,4,4,4,0, 4,4,4,4,4,4,0];
+    state = "player";
+    busy  = false;
+    overlay.classList.remove("show");
+    buildBoard();
+    renderAll();
+    updateScores();
+  }
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>플러드 · Flood It</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cell:#241c12;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:manipulation; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 11px;text-align:center;min-width:58px}
+  .box .lbl{font-size:10px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .box.lim .val{color:var(--muted)}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:1/1;overflow:hidden}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .palette{display:flex;gap:10px;margin-top:14px;justify-content:center}
+  .swatch{flex:1;max-width:58px;aspect-ratio:1/1;border-radius:13px;border:2px solid rgba(0,0,0,.28);
+    cursor:pointer;position:relative;padding:0;
+    box-shadow:inset 0 2px 4px rgba(255,255,255,.18), inset 0 -3px 6px rgba(0,0,0,.22);
+    transition:transform .1s ease, opacity .18s ease}
+  .swatch:active{transform:scale(.9)}
+  .swatch.cur{cursor:default;opacity:.45;outline:3px solid var(--cream);outline-offset:2px}
+  .foot{margin-top:16px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">플러드<span class="ref">한 색으로 판 전체를 물들인다 · Flood It</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">사용</div><div class="val" id="used">0</div></div>
+      <div class="box lim"><div class="lbl">허용</div><div class="val" id="limit">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">—</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">왼쪽 위에서 시작해 판을 한 색으로</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <canvas id="cv"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="palette" id="palette"></div>
+
+  <div class="foot">왼쪽 위 영역이 네 땅. 색을 고르면 같은 색 이웃이 빨려 들어온다. 손이 적을수록 좋다.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const N = 14;                       // grid is N x N cells
+  const NCOL = 6;                     // number of flood colors
+  // fair move budget for 14x14 / 6 colors lands around 25 with decent play
+  const LIMIT = 25;
+  const BEST_KEY = "funlab:flood:best";
+  const DUR = 280;                    // ms color-transition on a flood
+
+  // warm-leaning, mutually distinct, readable on the dark theme
+  const PALETTE = ["#ffb154","#ef6f4c","#d9477e","#7cb648","#46a9b5","#9a6fd4"];
+  const PAL_RGB = PALETTE.map(hexToRgb);
+
+  const boardEl   = document.getElementById("board");
+  const cv        = document.getElementById("cv");
+  const ctx       = cv.getContext("2d");
+  const usedEl    = document.getElementById("used");
+  const limitEl   = document.getElementById("limit");
+  const bestEl    = document.getElementById("best");
+  const paletteEl = document.getElementById("palette");
+  const overlay   = document.getElementById("overlay");
+  const overMsg   = document.getElementById("overMsg");
+  const overSmall = document.getElementById("overSmall");
+
+  // --- state ------------------------------------------------------------
+  let board;        // Uint8Array N*N of color indices
+  let ownedBool;    // Uint8Array N*N, 1 if part of the controlled territory
+  let anim;         // per-cell {from:[r,g,b], start} during a flood, else null
+  let moves;        // moves used
+  let best;         // fewest moves to win, 0 = none yet
+  let state;        // 'playing' | 'over'
+  let swatches = [];
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  // --- pixel sizing (retina + responsive) -------------------------------
+  let px = 0;
+  function resize(){
+    const rect = boardEl.getBoundingClientRect();
+    const dpr  = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const size = Math.round(rect.width * dpr);
+    cv.width  = size;
+    cv.height = size;
+    px = size / N;
+  }
+  window.addEventListener("resize", resize);
+
+  // build the color buttons once
+  for(let c=0;c<NCOL;c++){
+    const b = document.createElement("button");
+    b.className = "swatch";
+    b.style.background = PALETTE[c];
+    b.setAttribute("aria-label", "색 " + (c+1));
+    const ci = c;
+    b.addEventListener("click", ()=>pick(ci));
+    paletteEl.appendChild(b);
+    swatches.push(b);
+  }
+
+  function init(){
+    resize();
+    board     = new Uint8Array(N*N);
+    ownedBool = new Uint8Array(N*N);
+    anim      = new Array(N*N).fill(null);
+    for(let i=0;i<N*N;i++) board[i] = (Math.random()*NCOL)|0;
+    // nudge: make sure the origin's first pick can actually do something —
+    // not required for correctness, random boards are fine as-is.
+    moves = 0;
+    state = "playing";
+    overlay.classList.remove("show");
+    recomputeOwned();
+    updateUI();
+  }
+
+  // BFS the controlled territory: origin-connected run of board[0]'s color
+  function recomputeOwned(){
+    ownedBool.fill(0);
+    const target = board[0];
+    const stack = [0];
+    ownedBool[0] = 1;
+    while(stack.length){
+      const idx = stack.pop();
+      const r = (idx / N)|0, c = idx % N;
+      const nb = [
+        c>0   ? idx-1 : -1,
+        c<N-1 ? idx+1 : -1,
+        r>0   ? idx-N : -1,
+        r<N-1 ? idx+N : -1
+      ];
+      for(const n of nb){
+        if(n>=0 && !ownedBool[n] && board[n]===target){
+          ownedBool[n] = 1;
+          stack.push(n);
+        }
+      }
+    }
+  }
+
+  function ownedCount(){
+    let n=0; for(let i=0;i<N*N;i++) n+=ownedBool[i]; return n;
+  }
+
+  function pick(c){
+    if(state !== "playing") return;
+    const cur = board[0];
+    if(c === cur) return;             // same color: harmless no-op, no move spent
+
+    const now = performance.now();
+    // recolor the whole controlled territory; animate the cells that change
+    for(let i=0;i<N*N;i++){
+      if(ownedBool[i] && board[i] !== c){
+        anim[i] = { from: rgbOf(i), start: now };
+        board[i] = c;
+      }
+    }
+    moves++;
+    // the territory now merges with adjacent same-color regions
+    recomputeOwned();
+    updateUI();
+
+    const owned = ownedCount();
+    if(owned === N*N){
+      win();
+    } else if(moves >= LIMIT){
+      lose();
+    }
+  }
+
+  // current displayed rgb of a cell (mid-transition aware)
+  function rgbOf(i){
+    const target = PAL_RGB[board[i]];
+    const a = anim[i];
+    if(!a) return target.slice();
+    let t = (performance.now() - a.start) / DUR;
+    if(t >= 1) return target.slice();
+    t = t*(2-t);
+    return [
+      a.from[0] + (target[0]-a.from[0])*t,
+      a.from[1] + (target[1]-a.from[1])*t,
+      a.from[2] + (target[2]-a.from[2])*t
+    ];
+  }
+
+  function updateUI(){
+    usedEl.textContent  = moves;
+    limitEl.textContent = LIMIT;
+    bestEl.textContent  = best ? best : "—";
+    const cur = board[0];
+    for(let c=0;c<NCOL;c++){
+      swatches[c].classList.toggle("cur", c === cur);
+      swatches[c].disabled = (state !== "playing");
+    }
+  }
+
+  function win(){
+    state = "over";
+    let small;
+    if(!best || moves < best){
+      best = moves;
+      localStorage.setItem(BEST_KEY, String(best));
+      small = "최소 기록 경신!";
+    } else {
+      small = "best " + best + "회 — 더 줄일 수 있다.";
+    }
+    bestEl.textContent = best;
+    overMsg.innerHTML = `완성 · <b>${moves}</b>회`;
+    overSmall.textContent = small;
+    overlay.classList.add("show");
+    updateUI();
+  }
+
+  function lose(){
+    state = "over";
+    const left = N*N - ownedCount();
+    overMsg.innerHTML = `이동 소진 · <b>${moves}</b>회`;
+    overSmall.textContent = `${left}칸 남았다. 한 색으로 몰아붙여라.`;
+    overlay.classList.add("show");
+    updateUI();
+  }
+
+  // --- rendering --------------------------------------------------------
+  function render(){
+    const W = cv.width;
+    ctx.clearRect(0,0,W,W);
+    const g   = px * 0.07;
+    const sz  = px - g*2;
+    const rad = sz * 0.26;
+
+    // cells
+    for(let r=0;r<N;r++){
+      for(let c=0;c<N;c++){
+        const i = r*N + c;
+        const col = rgbOf(i);
+        ctx.fillStyle = `rgb(${col[0]|0},${col[1]|0},${col[2]|0})`;
+        roundRect(ctx, c*px+g, r*px+g, sz, sz, rad);
+        ctx.fill();
+      }
+    }
+
+    // territory outline: stroke the edges between owned and unowned cells
+    ctx.strokeStyle = "rgba(246,234,216,0.92)";
+    ctx.lineWidth = Math.max(1.5, px*0.07);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    for(let r=0;r<N;r++){
+      for(let c=0;c<N;c++){
+        const i = r*N + c;
+        if(!ownedBool[i]) continue;
+        const x0 = c*px, y0 = r*px, x1 = (c+1)*px, y1 = (r+1)*px;
+        if(c===0   || !ownedBool[i-1]){ ctx.moveTo(x0,y0); ctx.lineTo(x0,y1); }
+        if(c===N-1 || !ownedBool[i+1]){ ctx.moveTo(x1,y0); ctx.lineTo(x1,y1); }
+        if(r===0   || !ownedBool[i-N]){ ctx.moveTo(x0,y0); ctx.lineTo(x1,y0); }
+        if(r===N-1 || !ownedBool[i+N]){ ctx.moveTo(x0,y1); ctx.lineTo(x1,y1); }
+      }
+    }
+    ctx.stroke();
+  }
+
+  function roundRect(c, x, y, w, h, r){
+    r = Math.min(r, w/2, h/2);
+    c.beginPath();
+    c.moveTo(x+r, y);
+    c.arcTo(x+w, y,   x+w, y+h, r);
+    c.arcTo(x+w, y+h, x,   y+h, r);
+    c.arcTo(x,   y+h, x,   y,   r);
+    c.arcTo(x,   y,   x+w, y,   r);
+    c.closePath();
+  }
+
+  function frame(){
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  // --- helpers ----------------------------------------------------------
+  function hexToRgb(h){
+    return [ parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16) ];
+  }
+
+  // keyboard: 1..6 pick a color, r restarts
+  window.addEventListener("keydown", e=>{
+    if(e.key >= "1" && e.key <= String(NCOL)){
+      e.preventDefault();
+      pick(parseInt(e.key,10) - 1);
+    } else if(e.key === "r" || e.key === "R"){
+      init();
+    }
+  });
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

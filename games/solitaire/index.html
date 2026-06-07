@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>솔리테어 · Klondike</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --cw:60px; --ch:84px; --gap:6px;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 48px;
+    -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:480px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:14px}
+  .title{font-size:28px;font-weight:800;line-height:1;min-width:0;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.3px}
+  .scores{display:flex;gap:7px;flex:0 0 auto}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:7px 11px;text-align:center;min-width:56px}
+  .box .lbl{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:18px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+
+  .play{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:14px 12px;overflow:hidden}
+  .toprow{display:grid;grid-template-columns:repeat(7,var(--cw));gap:var(--gap);justify-content:center;margin-bottom:calc(var(--gap)*2.4)}
+  .tableau{display:grid;grid-template-columns:repeat(7,var(--cw));gap:var(--gap);justify-content:center;align-items:start}
+
+  .slot{position:relative;width:var(--cw);height:var(--ch);border-radius:calc(var(--cw)*0.12);
+    border:1px dashed #4a3d2b;display:flex;align-items:center;justify-content:center;
+    color:#5a4c39;font-size:calc(var(--cw)*0.4);font-weight:800;cursor:pointer}
+  .slot.blank{border:none;cursor:default}
+  .pile{position:relative;min-height:var(--ch)}
+
+  .card{position:absolute;left:0;top:0;width:var(--cw);height:var(--ch);
+    border-radius:calc(var(--cw)*0.12);
+    background:linear-gradient(#fdf6ea,#efe0c8);color:#1b1208;border:1px solid #d8c6a6;
+    box-shadow:0 2px 5px rgba(0,0,0,.4);cursor:pointer;overflow:hidden}
+  .card.red{color:#c2342b}
+  .card .corner{position:absolute;top:5%;left:8%;display:flex;flex-direction:column;align-items:center;
+    line-height:1;font-size:calc(var(--cw)*0.30);font-weight:800}
+  .card .corner .s{font-size:calc(var(--cw)*0.26);margin-top:1px}
+  .card .pip{position:absolute;top:55%;left:54%;transform:translate(-50%,-50%);
+    font-size:calc(var(--cw)*0.52);opacity:.92}
+  .card.back{background:repeating-linear-gradient(45deg,#3a2a16,#3a2a16 5px,#4a3925 5px,#4a3925 10px);
+    border-color:#5a4628}
+  .card.back .mk{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    color:var(--amber);font-size:calc(var(--cw)*0.4);opacity:.8}
+  .card.sel{outline:2px solid var(--amber);outline-offset:-1px;
+    box-shadow:0 0 0 2px rgba(255,177,84,.55),0 5px 12px rgba(0,0,0,.55);z-index:60}
+
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.9);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:80;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:24px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:16px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">솔리테어<span class="ref">차곡차곡 쌓아 네 무더기를 완성한다 · Klondike</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">이동</div><div class="val" id="moves">0</div></div>
+      <div class="box"><div class="lbl">시간</div><div class="val" id="time">0:00</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">—</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">눌러 고르고, 놓을 곳을 눌러라 · 더블클릭은 자동</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="play" id="play">
+    <div class="toprow" id="toprow"></div>
+    <div class="tableau" id="tableau"></div>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">A부터 K까지 무늬별로 쌓아 올린다. 더미는 색을 번갈아 내려 붙인다. 빈 칸엔 K만.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const BEST_KEY = "funlab:solitaire:best";
+  const SUIT = ["♠","♥","♦","♣"];      // 0 spade,1 heart,2 diamond,3 club
+  const isRed = s => s===1 || s===2;
+
+  const $ = id => document.getElementById(id);
+  const root      = document.documentElement;
+  const playEl    = $("play");
+  const toprowEl  = $("toprow");
+  const tableauEl = $("tableau");
+  const movesEl   = $("moves");
+  const timeEl    = $("time");
+  const bestEl    = $("best");
+  const overlay   = $("overlay");
+  const overMsg   = $("overMsg");
+  const overSmall = $("overSmall");
+
+  // --- state ----------------------------------------------------------
+  let stock, waste, foundations, tableau;
+  let selected = null;          // {type:'tableau',pile,index} | {type:'waste'} | {type:'foundation',idx}
+  let moves = 0;
+  let started = false, startMs = 0, timerId = null, won = false;
+  let CH = 84;                   // current card height (px), for offsets
+
+  // --- best -----------------------------------------------------------
+  function loadBest(){
+    try{ const v = JSON.parse(localStorage.getItem(BEST_KEY));
+      if(v && typeof v.moves==="number") return v; }catch(e){}
+    return null;
+  }
+  function recordBest(m, ms){
+    const b = loadBest();
+    if(!b || m < b.moves || (m===b.moves && ms < b.ms)){
+      localStorage.setItem(BEST_KEY, JSON.stringify({moves:m, ms:ms}));
+      return true;
+    }
+    return false;
+  }
+
+  // --- deck -----------------------------------------------------------
+  function buildDeck(){
+    const d = [];
+    for(let s=0;s<4;s++) for(let r=1;r<=13;r++)
+      d.push({rank:r, suit:s, red:isRed(s), faceUp:false});
+    for(let i=d.length-1;i>0;i--){
+      const j=(Math.random()*(i+1))|0; const t=d[i]; d[i]=d[j]; d[j]=t;
+    }
+    return d;
+  }
+  function rankLabel(r){ return r===1?"A":r===11?"J":r===12?"Q":r===13?"K":String(r); }
+
+  function deal(){
+    const d = buildDeck();
+    tableau = [[],[],[],[],[],[],[]];
+    for(let col=0;col<7;col++){
+      for(let r=0;r<=col;r++){
+        const c = d.pop();
+        c.faceUp = (r===col);
+        tableau[col].push(c);
+      }
+    }
+    stock = d;
+    stock.forEach(c => c.faceUp=false);
+    waste = [];
+    foundations = [[],[],[],[]];
+  }
+
+  // --- rules ----------------------------------------------------------
+  function canStackTableau(card, pile){
+    if(pile.length===0) return card.rank===13;
+    const top = pile[pile.length-1];
+    if(!top.faceUp) return false;
+    return top.rank === card.rank+1 && top.red !== card.red;
+  }
+  function canFoundation(card, fpile){
+    if(fpile.length===0) return card.rank===1;
+    const top = fpile[fpile.length-1];
+    return top.suit===card.suit && card.rank === top.rank+1;
+  }
+  function validSequence(cards){
+    for(let k=0;k<cards.length;k++) if(!cards[k].faceUp) return false;
+    for(let k=0;k<cards.length-1;k++){
+      if(!(cards[k].rank === cards[k+1].rank+1 && cards[k].red !== cards[k+1].red)) return false;
+    }
+    return true;
+  }
+
+  // --- selection helpers ----------------------------------------------
+  function parseLoc(s){
+    const p = s.split(":");
+    if(p[0]==="tableau")    return {type:"tableau", pile:+p[1], index:+p[2]};
+    if(p[0]==="foundation") return {type:"foundation", idx:+p[1]};
+    return {type:"waste"};
+  }
+  function parseDest(s){
+    const p = s.split(":");
+    if(p[0]==="tableau")    return {type:"tableau", pile:+p[1]};
+    return {type:"foundation", idx:+p[1]};
+  }
+  function getGroup(sel){
+    if(sel.type==="tableau")    return tableau[sel.pile].slice(sel.index);
+    if(sel.type==="waste")      return waste.length ? [waste[waste.length-1]] : [];
+    return foundations[sel.idx].length ? [foundations[sel.idx][foundations[sel.idx].length-1]] : [];
+  }
+  function sameSel(loc){
+    if(!selected) return false;
+    if(selected.type==="tableau" && loc.type==="tableau")
+      return selected.pile===loc.pile && selected.index===loc.index;
+    if(selected.type==="waste" && loc.type==="waste") return true;
+    if(selected.type==="foundation" && loc.type==="foundation") return selected.idx===loc.idx;
+    return false;
+  }
+  function clearSel(){ selected = null; }
+
+  function trySelect(loc){
+    if(loc.type==="waste"){
+      if(waste.length){ selected = {type:"waste"}; }
+      return;
+    }
+    if(loc.type==="foundation"){
+      if(foundations[loc.idx].length){ selected = {type:"foundation", idx:loc.idx}; }
+      return;
+    }
+    // tableau
+    const pile = tableau[loc.pile];
+    const card = pile[loc.index];
+    if(!card || !card.faceUp) return;
+    if(validSequence(pile.slice(loc.index))) selected = {type:"tableau", pile:loc.pile, index:loc.index};
+  }
+
+  function cardAsDest(loc){
+    if(loc.type==="tableau")    return {type:"tableau", pile:loc.pile};
+    if(loc.type==="foundation") return {type:"foundation", idx:loc.idx};
+    return null; // waste is not a destination
+  }
+
+  function removeFromSource(sel){
+    if(sel.type==="tableau"){
+      const pile = tableau[sel.pile];
+      pile.splice(sel.index);
+      if(pile.length && !pile[pile.length-1].faceUp) pile[pile.length-1].faceUp = true;
+    } else if(sel.type==="waste"){
+      waste.pop();
+    } else {
+      foundations[sel.idx].pop();
+    }
+  }
+
+  function tryMove(dest){
+    if(!selected) return false;
+    const group = getGroup(selected);
+    if(!group.length) return false;
+
+    if(dest.type==="tableau"){
+      if(selected.type==="tableau" && selected.pile===dest.pile) return false;
+      if(!canStackTableau(group[0], tableau[dest.pile])) return false;
+      removeFromSource(selected);
+      for(const c of group) tableau[dest.pile].push(c);
+    } else { // foundation
+      if(group.length !== 1) return false;
+      if(!canFoundation(group[0], foundations[dest.idx])) return false;
+      removeFromSource(selected);
+      foundations[dest.idx].push(group[0]);
+    }
+    ensureStarted();
+    moves++;
+    clearSel();
+    afterMove();
+    return true;
+  }
+
+  function autoFoundation(locStr){
+    const loc = parseLoc(locStr);
+    let src=null, card=null;
+    if(loc.type==="waste" && waste.length){
+      src = {type:"waste"}; card = waste[waste.length-1];
+    } else if(loc.type==="tableau"){
+      const p = tableau[loc.pile];
+      if(loc.index === p.length-1 && p[loc.index] && p[loc.index].faceUp){
+        src = {type:"tableau", pile:loc.pile, index:loc.index}; card = p[loc.index];
+      }
+    }
+    if(!src || !card) return;
+    for(let f=0;f<4;f++){
+      if(canFoundation(card, foundations[f])){
+        selected = src;
+        tryMove({type:"foundation", idx:f});
+        return;
+      }
+    }
+  }
+
+  // --- stock ----------------------------------------------------------
+  function drawStock(){
+    clearSel();
+    if(stock.length){
+      const c = stock.pop(); c.faceUp = true; waste.push(c);
+    } else if(waste.length){
+      while(waste.length){ const c = waste.pop(); c.faceUp = false; stock.push(c); }
+    } else { return; }
+    ensureStarted();
+    moves++;
+    afterMove();
+  }
+
+  // --- flow -----------------------------------------------------------
+  function afterMove(){
+    updateHud();
+    render();
+    checkWin();
+  }
+
+  function checkWin(){
+    if(foundations.every(f => f.length===13)){
+      won = true;
+      stopTimer();
+      const ms = started ? Date.now()-startMs : 0;
+      timeEl.textContent = fmt(ms);
+      const improved = recordBest(moves, ms);
+      const b = loadBest();
+      bestEl.textContent = b ? b.moves : "—";
+      overMsg.innerHTML = `완성! <b>${moves}</b>수`;
+      overSmall.textContent = `시간 ${fmt(ms)}` + (improved ? " · 최고 기록!" : "");
+      overlay.classList.add("show");
+    }
+  }
+
+  // --- timer ----------------------------------------------------------
+  function ensureStarted(){
+    if(started || won) return;
+    started = true; startMs = Date.now();
+    timerId = setInterval(tick, 250);
+  }
+  function tick(){ if(started && !won) timeEl.textContent = fmt(Date.now()-startMs); }
+  function stopTimer(){ if(timerId){ clearInterval(timerId); timerId=null; } }
+  function fmt(ms){ const s=Math.floor(ms/1000); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
+
+  // --- hud ------------------------------------------------------------
+  function updateHud(){ movesEl.textContent = moves; }
+
+  // --- rendering ------------------------------------------------------
+  function makeCard(card, faceUp, loc){
+    const el = document.createElement("div");
+    if(!faceUp){
+      el.className = "card back";
+      el.innerHTML = '<span class="mk">✦</span>';
+    } else {
+      el.className = "card" + (card.red ? " red" : "");
+      el.innerHTML =
+        '<span class="corner"><span class="r">'+rankLabel(card.rank)+'</span>'+
+        '<span class="s">'+SUIT[card.suit]+'</span></span>'+
+        '<span class="pip">'+SUIT[card.suit]+'</span>';
+    }
+    if(loc) el.dataset.loc = loc;
+    return el;
+  }
+  function isSelectedLoc(type, a, b){
+    if(!selected || selected.type!==type) return false;
+    if(type==="tableau") return selected.pile===a && b>=selected.index;
+    if(type==="waste") return true;
+    if(type==="foundation") return selected.idx===a;
+    return false;
+  }
+
+  function render(){
+    // top row: stock, waste, spacer, 4 foundations
+    toprowEl.innerHTML = "";
+
+    const stockSlot = document.createElement("div");
+    stockSlot.className = "slot";
+    stockSlot.dataset.action = "stock";
+    if(stock.length){
+      stockSlot.appendChild(makeCard(null, false, null));
+    } else {
+      stockSlot.textContent = "⟳";
+    }
+    toprowEl.appendChild(stockSlot);
+
+    const wasteSlot = document.createElement("div");
+    wasteSlot.className = "slot";
+    if(waste.length){
+      const c = waste[waste.length-1];
+      const el = makeCard(c, true, "waste");
+      if(isSelectedLoc("waste")) el.classList.add("sel");
+      wasteSlot.appendChild(el);
+    }
+    toprowEl.appendChild(wasteSlot);
+
+    const spacer = document.createElement("div");
+    spacer.className = "slot blank";
+    toprowEl.appendChild(spacer);
+
+    for(let f=0;f<4;f++){
+      const fs = document.createElement("div");
+      fs.className = "slot";
+      fs.dataset.dest = "foundation:"+f;
+      if(foundations[f].length){
+        const c = foundations[f][foundations[f].length-1];
+        const el = makeCard(c, true, "foundation:"+f);
+        if(isSelectedLoc("foundation", f)) el.classList.add("sel");
+        fs.appendChild(el);
+      } else {
+        fs.textContent = "A";
+        fs.style.color = "#5a4c39";
+      }
+      toprowEl.appendChild(fs);
+    }
+
+    // tableau
+    tableauEl.innerHTML = "";
+    const faceDownGap = Math.round(CH*0.17);
+    const faceUpGap   = Math.round(CH*0.30);
+    for(let i=0;i<7;i++){
+      const pile = tableau[i];
+      const col = document.createElement("div");
+      col.className = "pile";
+      col.dataset.dest = "tableau:"+i;
+      let y = 0;
+      for(let k=0;k<pile.length;k++){
+        const c = pile[k];
+        const el = makeCard(c, c.faceUp, "tableau:"+i+":"+k);
+        el.style.top = y+"px";
+        if(c.faceUp && isSelectedLoc("tableau", i, k)) el.classList.add("sel");
+        col.appendChild(el);
+        if(k < pile.length-1) y += c.faceUp ? faceUpGap : faceDownGap;
+      }
+      col.style.height = (y + CH) + "px";
+      tableauEl.appendChild(col);
+    }
+  }
+
+  // --- sizing ---------------------------------------------------------
+  function setSizes(){
+    const gap = 6;
+    const avail = playEl.clientWidth - 24; // minus horizontal padding
+    let cw = Math.floor((avail - gap*6)/7);
+    cw = Math.max(38, Math.min(74, cw));
+    const ch = Math.round(cw*1.4);
+    CH = ch;
+    root.style.setProperty("--cw", cw+"px");
+    root.style.setProperty("--ch", ch+"px");
+    root.style.setProperty("--gap", gap+"px");
+    render();
+  }
+
+  // --- input ----------------------------------------------------------
+  function handleTap(t){
+    if(t.kind==="card"){
+      const loc = parseLoc(t.loc);
+      if(selected){
+        const dest = cardAsDest(loc);
+        if(dest && tryMove(dest)) return;
+        if(sameSel(loc)){ clearSel(); render(); return; }
+        clearSel();
+        trySelect(loc);
+        render();
+      } else {
+        trySelect(loc);
+        render();
+      }
+    } else { // dest background (empty pile / foundation)
+      if(selected){
+        const dest = parseDest(t.dest);
+        if(tryMove(dest)) return;
+        clearSel();
+        render();
+      }
+    }
+  }
+
+  playEl.addEventListener("click", e=>{
+    if(won) return;
+    const stockEl = e.target.closest('[data-action="stock"]');
+    if(stockEl){ drawStock(); return; }
+    const cardEl = e.target.closest("[data-loc]");
+    if(cardEl){ handleTap({kind:"card", loc:cardEl.dataset.loc}); return; }
+    const destEl = e.target.closest("[data-dest]");
+    if(destEl){ handleTap({kind:"dest", dest:destEl.dataset.dest}); return; }
+  });
+
+  playEl.addEventListener("dblclick", e=>{
+    if(won) return;
+    const cardEl = e.target.closest("[data-loc]");
+    if(!cardEl) return;
+    autoFoundation(cardEl.dataset.loc);
+  });
+
+  window.addEventListener("resize", setSizes);
+
+  // --- new game -------------------------------------------------------
+  function newGame(){
+    stopTimer();
+    started = false; won = false; moves = 0; selected = null;
+    timeEl.textContent = "0:00";
+    deal();
+    const b = loadBest();
+    bestEl.textContent = b ? b.moves : "—";
+    movesEl.textContent = "0";
+    overlay.classList.remove("show");
+    setSizes();
+  }
+
+  $("restart").addEventListener("click", newGame);
+  $("overRestart").addEventListener("click", newGame);
+
+  newGame();
+})();
+</script>
+</body>
+</html>

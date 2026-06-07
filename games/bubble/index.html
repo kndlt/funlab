@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>버블슛 · Puzzle Bobble</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 14px;text-align:center;min-width:74px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:7/9;touch-action:none;overflow:hidden}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">버블슛<span class="ref">같은 색 셋을 맞춰 터뜨린다 · Puzzle Bobble</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">점수</div><div class="val" id="score">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">조준해서 발사 · 같은 색 3개+</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <canvas id="cv"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">벽에 튕겨 끼운다. 같은 색 셋이 모이면 터지고, 천장에서 떨어진 무리는 보너스. 바닥에 닿으면 끝.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const COLS = 8;
+  const START_ROWS = 5;
+  const PUSH_EVERY = 5;            // 매 N발마다 새 줄이 내려온다
+  const SPEED = 0.95;             // 발사체 속도 (css px / ms)
+  const BEST_KEY = "funlab:bubble:best";
+
+  // 따뜻하게 기운 색 한 벌 (UI 앰버와는 구분)
+  const COLORS = [
+    {base:"#ff5d52", light:"#ffb3ab"},  // coral
+    {base:"#ff9f33", light:"#ffd49a"},  // orange
+    {base:"#ffd23f", light:"#fff0a8"},  // gold
+    {base:"#6fbf73", light:"#c2e6bd"},  // warm green
+    {base:"#b07cff", light:"#ddc6ff"},  // violet
+  ];
+  const NUM_COLORS = COLORS.length;
+
+  const boardEl = document.getElementById("board");
+  const cv      = document.getElementById("cv");
+  const ctx     = cv.getContext("2d");
+  const scoreEl = document.getElementById("score");
+  const bestEl  = document.getElementById("best");
+  const overlay = document.getElementById("overlay");
+  const overMsg = document.getElementById("overMsg");
+  const overSmall = document.getElementById("overSmall");
+
+  // --- geometry (retina + responsive) -----------------------------------
+  let W=0, H=0, bubbleR=0, d=0, rowH=0;
+  let shooterX=0, shooterY=0, deadLineY=0;
+
+  function resize(){
+    const rect = boardEl.getBoundingClientRect();
+    const dpr  = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    cv.width  = Math.round(rect.width  * dpr);
+    cv.height = Math.round(rect.height * dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);   // work in css-pixel logical coords
+    W = rect.width; H = rect.height;
+    bubbleR = W / (2*COLS + 1);
+    d = bubbleR * 2;
+    rowH = bubbleR * Math.sqrt(3);
+    shooterX = W/2;
+    shooterY = H - bubbleR*1.5;
+    deadLineY = shooterY - bubbleR*1.4;
+  }
+  window.addEventListener("resize", resize);
+
+  // --- grid --------------------------------------------------------------
+  // grid[r][c] = colorIndex or null. Odd rows are shifted right by bubbleR.
+  let grid;
+
+  function cellX(r,c){ return bubbleR + c*d + ((r&1) ? bubbleR : 0); }
+  function cellY(r){ return bubbleR + r*rowH; }
+
+  function neighbors(r,c){
+    if(r&1) return [[r,c-1],[r,c+1],[r-1,c],[r-1,c+1],[r+1,c],[r+1,c+1]];
+    return        [[r,c-1],[r,c+1],[r-1,c-1],[r-1,c],[r+1,c-1],[r+1,c]];
+  }
+  function get(r,c){
+    if(r<0 || c<0 || c>=COLS || r>=grid.length) return null;
+    return grid[r][c];
+  }
+  function ensureRow(r){
+    while(grid.length <= r) grid.push(new Array(COLS).fill(null));
+  }
+  function newRow(){
+    const row = new Array(COLS);
+    for(let c=0;c<COLS;c++) row[c] = (Math.random()*NUM_COLORS)|0;
+    return row;
+  }
+
+  // --- state -------------------------------------------------------------
+  let projectile;   // {x,y,vx,vy,color} or null
+  let shooter;      // {color, next}
+  let aimAngle;     // radians, pointing up (vy < 0)
+  let pops;         // pop animations
+  let falling;      // dropping bubbles
+  let score, best, shots, state, last;
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  function presentColors(){
+    const s = new Set();
+    for(let r=0;r<grid.length;r++)
+      for(let c=0;c<COLS;c++)
+        if(grid[r][c]!==null) s.add(grid[r][c]);
+    return [...s];
+  }
+  function randColor(){
+    const p = presentColors();
+    if(!p.length) return (Math.random()*NUM_COLORS)|0;
+    return p[(Math.random()*p.length)|0];
+  }
+
+  function init(){
+    resize();
+    grid = [];
+    for(let r=0;r<START_ROWS;r++) grid.push(newRow());
+    ensureRow(START_ROWS); // trailing empty row available for placement
+    projectile = null;
+    pops = [];
+    falling = [];
+    score = 0;
+    shots = 0;
+    aimAngle = -Math.PI/2;
+    shooter = { color: randColor(), next: randColor() };
+    state = "aim";
+    overlay.classList.remove("show");
+    updateScores();
+    last = performance.now();
+  }
+
+  function updateScores(){
+    scoreEl.textContent = score;
+    bestEl.textContent = best;
+  }
+
+  // --- aiming / shooting -------------------------------------------------
+  function aimTo(px, py){
+    let dx = px - shooterX, dy = py - shooterY;
+    if(dy > -0.0001) dy = -0.0001;           // never aim down/flat
+    let a = Math.atan2(dy, dx);              // in (-pi, 0)
+    const lo = -Math.PI + 0.18, hi = -0.18;  // clamp away from horizontal
+    if(a < lo) a = lo;
+    if(a > hi) a = hi;
+    aimAngle = a;
+  }
+
+  function shoot(){
+    if(state !== "aim" || projectile) return;
+    projectile = {
+      x: shooterX, y: shooterY,
+      vx: Math.cos(aimAngle), vy: Math.sin(aimAngle),
+      color: shooter.color
+    };
+    state = "shooting";
+  }
+
+  function advanceShooter(){
+    shooter.color = shooter.next;
+    shooter.next  = randColor();
+  }
+
+  // --- collision while flying -------------------------------------------
+  function hitsBubble(px,py){
+    const thr = (d*0.97)*(d*0.97);
+    for(let r=0;r<grid.length;r++){
+      const by = cellY(r);
+      if(by + bubbleR < py - d) continue;     // far below — skip
+      for(let c=0;c<COLS;c++){
+        if(grid[r][c]===null) continue;
+        const dx = px - cellX(r,c), dy = py - by;
+        if(dx*dx + dy*dy < thr) return true;
+      }
+    }
+    return false;
+  }
+
+  function nearestEmptyCell(px,py){
+    ensureRow(grid.length);          // make sure a row below exists
+    let best=null, bestD=Infinity;
+    for(let r=0;r<grid.length;r++){
+      for(let c=0;c<COLS;c++){
+        if(grid[r][c]!==null) continue;
+        // must connect: row 0 or adjacent to a filled bubble
+        let ok = (r===0);
+        if(!ok){
+          const nb = neighbors(r,c);
+          for(const [nr,nc] of nb){ if(get(nr,nc)!==null){ ok=true; break; } }
+        }
+        if(!ok) continue;
+        const dx = px - cellX(r,c), dy = py - cellY(r);
+        const dd = dx*dx + dy*dy;
+        if(dd < bestD){ bestD = dd; best = {r,c}; }
+      }
+    }
+    return best;
+  }
+
+  function sameGroup(sr,sc,color){
+    const out=[], seen=new Set(), stack=[[sr,sc]];
+    seen.add(sr*COLS+sc);
+    while(stack.length){
+      const [r,c]=stack.pop();
+      out.push({r,c});
+      for(const [nr,nc] of neighbors(r,c)){
+        if(nr<0||nc<0||nc>=COLS||nr>=grid.length) continue;
+        const k = nr*COLS+nc;
+        if(seen.has(k)) continue;
+        if(grid[nr][nc]===color){ seen.add(k); stack.push([nr,nc]); }
+      }
+    }
+    return out;
+  }
+
+  function findFloaters(){
+    const anchored = new Set(), stack=[];
+    for(let c=0;c<COLS;c++) if(grid[0] && grid[0][c]!==null){ anchored.add(c); stack.push([0,c]); }
+    while(stack.length){
+      const [r,c]=stack.pop();
+      for(const [nr,nc] of neighbors(r,c)){
+        if(nr<0||nc<0||nc>=COLS||nr>=grid.length) continue;
+        if(grid[nr][nc]===null) continue;
+        const k = nr*COLS+nc;
+        if(anchored.has(k)) continue;
+        anchored.add(k); stack.push([nr,nc]);
+      }
+    }
+    const out=[];
+    for(let r=0;r<grid.length;r++)
+      for(let c=0;c<COLS;c++)
+        if(grid[r][c]!==null && !anchored.has(r*COLS+c)) out.push({r,c});
+    return out;
+  }
+
+  function anyFilled(){
+    for(let r=0;r<grid.length;r++)
+      for(let c=0;c<COLS;c++)
+        if(grid[r][c]!==null) return true;
+    return false;
+  }
+  function reachedDeadLine(){
+    for(let r=0;r<grid.length;r++){
+      const y = cellY(r) + bubbleR;
+      if(y < deadLineY) continue;
+      for(let c=0;c<COLS;c++) if(grid[r][c]!==null) return true;
+    }
+    return false;
+  }
+
+  function pushRow(){
+    grid.unshift(newRow());
+  }
+
+  function settle(){
+    const px = projectile.x, py = projectile.y, color = projectile.color;
+    projectile = null;
+
+    const cell = nearestEmptyCell(px, py);
+    if(!cell){ // safety: should not happen
+      state = "aim"; advanceShooter(); return;
+    }
+    ensureRow(cell.r);
+    grid[cell.r][cell.c] = color;
+
+    let popped = 0, dropped = 0;
+    const group = sameGroup(cell.r, cell.c, color);
+    if(group.length >= 3){
+      for(const k of group){
+        pops.push({x:cellX(k.r,k.c), y:cellY(k.r), color, t:0});
+        grid[k.r][k.c] = null;
+      }
+      popped = group.length;
+      const floaters = findFloaters();
+      for(const k of floaters){
+        falling.push({
+          x:cellX(k.r,k.c), y:cellY(k.r), color:grid[k.r][k.c],
+          vx:(Math.random()-0.5)*0.06, vy:0.02
+        });
+        grid[k.r][k.c] = null;
+      }
+      dropped = floaters.length;
+    }
+
+    if(popped){
+      score += popped*10 + dropped*20;
+      if(score > best){ best = score; localStorage.setItem(BEST_KEY, String(best)); }
+      updateScores();
+    }
+
+    shots++;
+    if(shots % PUSH_EVERY === 0) pushRow();
+
+    if(!anyFilled()){ win(); return; }
+    if(reachedDeadLine()){ lose(); return; }
+
+    advanceShooter();
+    state = "aim";
+  }
+
+  function win(){
+    state = "won";
+    if(score > best){ best = score; localStorage.setItem(BEST_KEY, String(best)); updateScores(); }
+    overMsg.innerHTML = `클리어 · 점수 <b>${score}</b>`;
+    overSmall.textContent = "판을 싹 비웠다. 깔끔하게.";
+    overlay.classList.add("show");
+  }
+  function lose(){
+    state = "lost";
+    overMsg.innerHTML = `막혔다 · 점수 <b>${score}</b>`;
+    overSmall.textContent = score >= best && score>0 ? "최고 기록 경신! 다시." : "바닥까지 밀렸다. 다시.";
+    overlay.classList.add("show");
+  }
+
+  // --- update ------------------------------------------------------------
+  function update(dt){
+    if(state === "shooting" && projectile){
+      let remaining = SPEED * dt;
+      const stepLen = bubbleR * 0.5;
+      while(remaining > 0 && projectile){
+        const s = Math.min(stepLen, remaining); remaining -= s;
+        projectile.x += projectile.vx * s;
+        projectile.y += projectile.vy * s;
+        if(projectile.x < bubbleR){ projectile.x = bubbleR; projectile.vx = -projectile.vx; }
+        else if(projectile.x > W-bubbleR){ projectile.x = W-bubbleR; projectile.vx = -projectile.vx; }
+        if(projectile.y - bubbleR <= 0){ projectile.y = bubbleR; settle(); break; }
+        if(hitsBubble(projectile.x, projectile.y)){ settle(); break; }
+      }
+    }
+
+    // pops
+    for(let i=pops.length-1;i>=0;i--){
+      pops[i].t += dt;
+      if(pops[i].t > 220) pops.splice(i,1);
+    }
+    // falling
+    for(let i=falling.length-1;i>=0;i--){
+      const f = falling[i];
+      f.vy += 0.0016 * dt;
+      f.y  += f.vy * dt;
+      f.x  += f.vx * dt;
+      if(f.y - bubbleR > H) falling.splice(i,1);
+    }
+  }
+
+  // --- rendering ---------------------------------------------------------
+  function drawBubble(x,y,colorIdx,scale,alpha){
+    const col = COLORS[colorIdx];
+    const r = bubbleR * (scale||1) * 0.94;
+    ctx.globalAlpha = (alpha==null?1:alpha);
+    const g = ctx.createRadialGradient(x-r*0.35, y-r*0.4, r*0.1, x, y, r);
+    g.addColorStop(0, col.light);
+    g.addColorStop(1, col.base);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    ctx.lineWidth = r*0.08;
+    ctx.strokeStyle = "rgba(40,24,8,0.22)";
+    ctx.stroke();
+    // gloss
+    ctx.fillStyle = "rgba(255,255,255,0.34)";
+    ctx.beginPath();
+    ctx.ellipse(x-r*0.32, y-r*0.36, r*0.30, r*0.20, -0.5, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  function aimPath(){
+    let x=shooterX, y=shooterY;
+    let dx=Math.cos(aimAngle), dy=Math.sin(aimAngle);
+    const pts=[{x,y}];
+    const step=bubbleR*0.5;
+    let len=0; const maxLen=H*2.2;
+    while(len < maxLen){
+      x += dx*step; y += dy*step; len += step;
+      if(x < bubbleR){ x=bubbleR; dx=-dx; }
+      else if(x > W-bubbleR){ x=W-bubbleR; dx=-dx; }
+      if(y - bubbleR <= 0){ pts.push({x,y:bubbleR}); break; }
+      if(hitsBubble(x,y)){ pts.push({x,y}); break; }
+      pts.push({x,y});
+    }
+    return pts;
+  }
+
+  function render(){
+    ctx.clearRect(0,0,W,H);
+
+    // dead line
+    ctx.setLineDash([6,6]);
+    ctx.strokeStyle = "rgba(255,93,82,0.35)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, deadLineY); ctx.lineTo(W, deadLineY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // grid
+    for(let r=0;r<grid.length;r++)
+      for(let c=0;c<COLS;c++)
+        if(grid[r][c]!==null) drawBubble(cellX(r,c), cellY(r), grid[r][c], 1, 1);
+
+    // pops (expanding fade ring)
+    for(const p of pops){
+      const k = p.t/220;
+      const r = bubbleR*(0.6 + k*0.9);
+      ctx.globalAlpha = (1-k)*0.7;
+      ctx.lineWidth = bubbleR*0.22*(1-k);
+      ctx.strokeStyle = COLORS[p.color].light;
+      ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // falling
+    for(const f of falling){
+      const a = Math.max(0, Math.min(1, (H - f.y)/(H*0.5) + 0.4));
+      drawBubble(f.x, f.y, f.color, 1, a);
+    }
+
+    // aim guide
+    if(state === "aim" && !projectile){
+      const pts = aimPath();
+      ctx.setLineDash([2, bubbleR*0.5]);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(246,234,216,0.45)";
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const end = pts[pts.length-1];
+      ctx.strokeStyle = "rgba(255,177,84,0.7)";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(end.x, end.y, bubbleR*0.5, 0, Math.PI*2); ctx.stroke();
+    }
+
+    // projectile
+    if(projectile) drawBubble(projectile.x, projectile.y, projectile.color, 1, 1);
+
+    // next bubble preview (small, beside shooter)
+    drawBubble(shooterX - bubbleR*2.4, shooterY, shooter.next, 0.62, 0.9);
+
+    // shooter base + current bubble
+    ctx.fillStyle = "rgba(58,48,36,0.9)";
+    ctx.beginPath();
+    ctx.arc(shooterX, shooterY, bubbleR*1.25, Math.PI, 0);
+    ctx.fill();
+    if(!projectile && (state==="aim")) drawBubble(shooterX, shooterY, shooter.color, 1, 1);
+    else if(state!=="aim") drawBubble(shooterX, shooterY, shooter.color, 1, 0.35);
+  }
+
+  // --- main loop ---------------------------------------------------------
+  function frame(now){
+    const dt = Math.min(48, now - last);
+    last = now;
+    if(state !== "won" && state !== "lost") update(dt);
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  // --- input -------------------------------------------------------------
+  function pointerPos(e){
+    const rect = boardEl.getBoundingClientRect();
+    const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
+    return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+  }
+
+  boardEl.addEventListener("mousemove", e=>{
+    if(state!=="aim") return;
+    const p = pointerPos(e); aimTo(p.x, p.y);
+  });
+  boardEl.addEventListener("click", e=>{
+    if(state!=="aim") return;
+    const p = pointerPos(e); aimTo(p.x, p.y); shoot();
+  });
+  boardEl.addEventListener("touchstart", e=>{
+    if(state!=="aim") return;
+    e.preventDefault();
+    const p = pointerPos(e); aimTo(p.x, p.y);
+  }, {passive:false});
+  boardEl.addEventListener("touchmove", e=>{
+    if(state!=="aim") return;
+    e.preventDefault();
+    const p = pointerPos(e); aimTo(p.x, p.y);
+  }, {passive:false});
+  boardEl.addEventListener("touchend", e=>{
+    if(state!=="aim") return;
+    e.preventDefault();
+    shoot();
+  }, {passive:false});
+
+  // keyboard: arrows aim, space/up shoots
+  window.addEventListener("keydown", e=>{
+    if(state!=="aim") return;
+    if(e.key==="ArrowLeft"  || e.key==="a"){ e.preventDefault(); aimAngle = Math.max(-Math.PI+0.18, aimAngle - 0.04); }
+    else if(e.key==="ArrowRight" || e.key==="d"){ e.preventDefault(); aimAngle = Math.min(-0.18, aimAngle + 0.04); }
+    else if(e.key===" " || e.key==="ArrowUp" || e.key==="w"){ e.preventDefault(); shoot(); }
+  });
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

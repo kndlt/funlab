@@ -163,6 +163,38 @@ const GAMES=[
   // ── risk (joins 한 번 더?) ──
   {slug:'slot',   title:'슬롯머신',  ref:'Slot Machine',    cat:'risk',
    essence:'돌리고 멈춘다 — 변동 보상의 *중독*.', nerve:'luck ⊗ jackpot'},
+
+  // ══ batch 4 — boards, cards, deeper puzzles ══
+  // ── cards ──
+  {slug:'solitaire',title:'솔리테어',ref:'Klondike',        cat:'cards',
+   essence:'차곡차곡 쌓아 네 무더기를 *완성*한다.', nerve:'patience ⊗ order'},
+  {slug:'yahtzee',title:'야찌',      ref:'Yahtzee',         cat:'cards',
+   essence:'굴려 족보를 채운다 — *한 번 더?*', nerve:'dice ⊗ combo'},
+  // ── strategy (vs AI) ──
+  {slug:'gomoku', title:'오목',      ref:'Gomoku',          cat:'strategy',
+   essence:'다섯 개를 먼저 *나란히* 놓는다.', nerve:'strategy ⊗ alignment'},
+  {slug:'checkers',title:'체커',     ref:'Checkers',        cat:'strategy',
+   essence:'뛰어넘어 *잡고*, 끝줄에서 왕이 된다.', nerve:'strategy ⊗ capture'},
+  {slug:'mancala',title:'만칼라',    ref:'Mancala',         cat:'strategy',
+   essence:'씨앗을 뿌려 내 *곳간*을 채운다.', nerve:'strategy ⊗ counting'},
+  // ── puzzle ──
+  {slug:'sokoban',title:'창고지기',  ref:'Sokoban',         cat:'puzzle',
+   essence:'상자를 밀어 *제자리*에 놓는다.', nerve:'planning ⊗ push'},
+  {slug:'rushhour',title:'러시아워', ref:'Rush Hour',       cat:'puzzle',
+   essence:'막힌 차를 밀어 빨간 차를 *빼낸다*.', nerve:'extraction ⊗ planning'},
+  {slug:'hanoi',  title:'하노이탑',  ref:'Tower of Hanoi',  cat:'puzzle',
+   essence:'한 번에 하나씩 — 큰 원반은 작은 위에 못 놓는다.', nerve:'recursion ⊗ order'},
+  {slug:'flood',  title:'플러드',    ref:'Flood It',        cat:'puzzle',
+   essence:'한 색으로 판 전체를 *물들인다*.', nerve:'fill ⊗ greedy'},
+  // ── aim ──
+  {slug:'bubble', title:'버블슛',    ref:'Puzzle Bobble',   cat:'aim',
+   essence:'같은 색 셋을 맞춰 *터뜨린다*.', nerve:'aim ⊗ match'},
+  // ── arcade ──
+  {slug:'doodle', title:'두들점프',  ref:'Doodle Jump',     cat:'arcade',
+   essence:'발판을 밟고 *끝없이 위로*.', nerve:'flow ⊗ ascent'},
+  // ── deduction ──
+  {slug:'anagram',title:'애너그램',  ref:'Word Scramble',   cat:'deduction',
+   essence:'섞인 글자로 *단어*를 만든다.', nerve:'word ⊗ speed'},
 ];
 
 const grid=document.getElementById('grid');

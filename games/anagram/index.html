@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>애너그램 · Word Scramble</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+    --tile:#2a2014; --tile-line:#5a4628;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 12px;text-align:center;min-width:62px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .box .val.warn{color:var(--amber)}
+
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;padding:22px 18px 20px;overflow:hidden}
+
+  .slots{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;min-height:60px;margin-bottom:20px}
+  .slot{width:48px;height:58px;border-radius:10px;border:2px dashed var(--line);
+    background:rgba(255,255,255,.015);display:flex;align-items:center;justify-content:center}
+  .slot.filled{border-style:solid;border-color:transparent;background:transparent;padding:0}
+
+  .rack{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;min-height:58px;margin-bottom:18px}
+
+  .tile{width:48px;height:58px;border-radius:10px;cursor:pointer;
+    background:linear-gradient(#3a2c18,#2a2014);border:1px solid var(--tile-line);
+    box-shadow:0 2px 0 #160f08, inset 0 1px 0 rgba(255,210,150,.12);
+    display:flex;align-items:center;justify-content:center;position:relative;
+    font-size:26px;font-weight:800;color:var(--cream);text-transform:uppercase;
+    transition:transform .06s ease}
+  .tile:active{transform:translateY(2px);box-shadow:0 0 0 #160f08, inset 0 1px 0 rgba(255,210,150,.12)}
+  .tile.placed{cursor:pointer;background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;
+    border-color:#ffd9a0;box-shadow:0 2px 0 #a85f15, inset 0 1px 0 rgba(255,255,255,.35)}
+  .tile.placed:active{transform:translateY(2px);box-shadow:0 0 0 #a85f15, inset 0 1px 0 rgba(255,255,255,.35)}
+  .tile.ghost{visibility:hidden}
+  .tile.shake{animation:shake .32s ease}
+  @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(7px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+  .slots.good .tile.placed{animation:pop .3s ease}
+  @keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.16)}100%{transform:scale(1)}}
+
+  .controls{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+  .btn{background:var(--tile);color:var(--ink);border:1px solid var(--line);
+    padding:9px 16px;border-radius:22px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+  .btn:active{transform:scale(.96)}
+  .btn:hover{border-color:var(--tile-line);color:var(--cream)}
+  .btn.primary{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;border:none;font-weight:800}
+  .btn.primary:disabled{opacity:.4;cursor:default}
+
+  .barline{display:flex;align-items:center;justify-content:space-between;margin:14px 2px 0;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .flash{position:absolute;top:10px;left:50%;transform:translateX(-50%);
+    font-size:13px;font-weight:800;padding:4px 14px;border-radius:20px;
+    background:rgba(255,177,84,.16);color:var(--amber);opacity:0;pointer-events:none;
+    transition:opacity .2s ease}
+  .flash.show{opacity:1}
+
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.9);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:300px;line-height:1.6}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:9px 22px;border-radius:22px;font-size:14px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">애너그램<span class="ref">섞인 글자로 단어를 만든다 · Word Scramble</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">점수</div><div class="val" id="score">0</div></div>
+      <div class="box"><div class="lbl">시간</div><div class="val" id="time">90</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">0</div></div>
+    </div>
+  </div>
+
+  <div class="board" id="board">
+    <div class="flash" id="flash"></div>
+    <div class="slots" id="slots"></div>
+    <div class="rack" id="rack"></div>
+    <div class="controls">
+      <button class="btn" id="shuffle">섞기</button>
+      <button class="btn" id="clear">비우기</button>
+      <button class="btn" id="hint">힌트 −5</button>
+      <button class="btn" id="skip">건너뛰기</button>
+      <button class="btn primary" id="submit">제출</button>
+    </div>
+
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">타일 탭 / 타이핑 · Enter 제출 · Backspace 지움</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="foot">90초. 섞인 글자를 풀어 단어를 맞혀라. 빨리 풀수록 보너스. 막히면 건너뛰어.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const BEST_KEY = "funlab:anagram:best";
+  const ROUND_TIME = 90;          // seconds per session
+  const HINT_COST = 5;
+  const BASE_PTS = 10;            // points for solving a word
+  const LEN_BONUS = 5;           // per letter beyond base
+  const SPEED_WINDOW = 12;       // seconds to claim full speed bonus
+  const SPEED_BONUS = 10;        // max speed bonus per word
+
+  // --- embedded common English words (length 5..7) ----------------------
+  const WORDS = [
+    "apple","beach","bread","chair","cloud","dance","dream","earth","field","fruit",
+    "ghost","glass","grape","green","heart","house","juice","light","money","music",
+    "night","ocean","paper","party","peace","plant","power","queen","river","robot",
+    "salad","sheep","shirt","smile","snake","stone","storm","sugar","table","tiger",
+    "tooth","train","water","wheel","world","brave","candy","chess","cream","drink",
+    "eagle","flame","grass","honey","lemon","maple","mouse","north","piano","plate",
+    "quilt","ranch","shore","spice","sword","trail","vivid","wagon","beard","cabin",
+    "branch","bridge","button","candle","carpet","cheese","circle","coffee","danger","desert",
+    "dragon","engine","forest","garden","guitar","hammer","island","jungle","kitten","ladder",
+    "magnet","market","mirror","monkey","muscle","needle","orange","palace","pencil","planet",
+    "pocket","puzzle","rabbit","rocket","saddle","silver","singer","spider","spring","square",
+    "summer","temple","throne","ticket","tomato","violin","window","winter","wizard","yellow",
+    "anchor","basket","beetle","bottle","bucket","camera","cherry","copper","cotton","flower",
+    "battery","blanket","captain","chimney","cottage","crystal","diamond","dolphin","factory","feather",
+    "gateway","general","glacier","harvest","hexagon","journey","kitchen","lantern","leopard","library",
+    "machine","mineral","monster","morning","octopus","painter","pancake","penguin","picture","pyramid",
+    "rainbow","sandbox","scarlet","silence","soldier","station","stomach","teapot","thunder","tornado",
+    "trumpet","village","volcano","warrior","weather","whisker","wildcat"
+  ];
+
+  // precompute sorted-letter signature -> set of valid words (for anagrams)
+  const SIG = {};
+  function sig(w){ return w.split("").sort().join(""); }
+  for(const w of WORDS){
+    const s = sig(w);
+    (SIG[s] || (SIG[s] = [])).push(w);
+  }
+
+  // --- DOM --------------------------------------------------------------
+  const boardEl  = document.getElementById("board");
+  const slotsEl  = document.getElementById("slots");
+  const rackEl   = document.getElementById("rack");
+  const scoreEl  = document.getElementById("score");
+  const timeEl   = document.getElementById("time");
+  const bestEl   = document.getElementById("best");
+  const flashEl  = document.getElementById("flash");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+
+  // --- state ------------------------------------------------------------
+  let target;        // current target word (lowercase)
+  let rack;          // array of {ch, used:bool} — the available letters
+  let placed;        // array of rack indices currently in the slots (in order)
+  let score, best;
+  let timeLeft;      // seconds remaining
+  let wordStart;     // performance.now() when current word shown
+  let running;       // bool
+  let timerId, tickId;
+  let usedHint;      // hint already taken on this word?
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  function shuffleArr(a){
+    for(let i=a.length-1;i>0;i--){
+      const j = (Math.random()*(i+1))|0;
+      [a[i],a[j]] = [a[j],a[i]];
+    }
+    return a;
+  }
+
+  function pickWord(){
+    let w;
+    do { w = WORDS[(Math.random()*WORDS.length)|0]; }
+    while(w === target);   // avoid immediate repeat
+    return w;
+  }
+
+  // build a scrambled rack that is NOT already the answer
+  function makeRack(word){
+    let order;
+    let attempts = 0;
+    do {
+      order = shuffleArr(word.split(""));
+      attempts++;
+    } while(order.join("") === word && attempts < 20);
+    return order.map(ch => ({ch, used:false}));
+  }
+
+  function newWord(){
+    target = pickWord();
+    rack = makeRack(target);
+    placed = [];
+    usedHint = false;
+    wordStart = performance.now();
+    renderRack();
+    renderSlots();
+  }
+
+  // --- rendering --------------------------------------------------------
+  function renderRack(){
+    rackEl.innerHTML = "";
+    rack.forEach((t, i) => {
+      const el = document.createElement("div");
+      el.className = "tile" + (t.used ? " ghost" : "");
+      el.textContent = t.ch;
+      el.dataset.idx = i;
+      el.addEventListener("click", () => placeLetter(i));
+      rackEl.appendChild(el);
+    });
+  }
+
+  function renderSlots(){
+    slotsEl.innerHTML = "";
+    slotsEl.classList.remove("good");
+    for(let i=0;i<target.length;i++){
+      const slot = document.createElement("div");
+      slot.className = "slot";
+      if(i < placed.length){
+        slot.classList.add("filled");
+        const rIdx = placed[i];
+        const tile = document.createElement("div");
+        tile.className = "tile placed";
+        tile.textContent = rack[rIdx].ch;
+        tile.addEventListener("click", () => removeAt(i));
+        slot.appendChild(tile);
+      }
+      slotsEl.appendChild(slot);
+    }
+  }
+
+  // --- input actions ----------------------------------------------------
+  function placeLetter(rIdx){
+    if(!running) return;
+    if(rack[rIdx].used) return;
+    if(placed.length >= target.length) return;
+    rack[rIdx].used = true;
+    placed.push(rIdx);
+    renderRack();
+    renderSlots();
+    if(placed.length === target.length) submit();
+  }
+
+  // place first available rack tile matching a typed character
+  function typeChar(ch){
+    if(!running) return;
+    for(let i=0;i<rack.length;i++){
+      if(!rack[i].used && rack[i].ch === ch){ placeLetter(i); return; }
+    }
+  }
+
+  function removeAt(slotIdx){
+    if(!running) return;
+    if(slotIdx < 0 || slotIdx >= placed.length) return;
+    const rIdx = placed[slotIdx];
+    rack[rIdx].used = false;
+    placed.splice(slotIdx, 1);
+    renderRack();
+    renderSlots();
+  }
+
+  function removeLast(){
+    if(placed.length) removeAt(placed.length - 1);
+  }
+
+  function clearSlots(){
+    if(!running) return;
+    placed.forEach(rIdx => { rack[rIdx].used = false; });
+    placed = [];
+    renderRack();
+    renderSlots();
+  }
+
+  function shuffleRack(){
+    if(!running) return;
+    // keep placed letters; reshuffle only the unused ones' display order
+    clearSlots();
+    rack = makeRack(target);
+    renderRack();
+    renderSlots();
+  }
+
+  function currentGuess(){
+    return placed.map(i => rack[i].ch).join("");
+  }
+
+  function isValid(guess){
+    if(guess.length !== target.length) return false;
+    if(guess === target) return true;
+    // accept any embedded word that is an anagram of the scrambled letters
+    const list = SIG[sig(target)];
+    return list && list.indexOf(guess) !== -1;
+  }
+
+  function submit(){
+    if(!running) return;
+    const guess = currentGuess();
+    if(guess.length !== target.length){
+      flash("글자를 다 채워", false);
+      return;
+    }
+    if(isValid(guess)){
+      // speed bonus: full within SPEED_WINDOW, linear decay after
+      const elapsed = (performance.now() - wordStart) / 1000;
+      const speed = Math.max(0, Math.round(SPEED_BONUS * (1 - elapsed / (SPEED_WINDOW*2))));
+      const lenPts = (target.length - 5) * LEN_BONUS;
+      const gain = BASE_PTS + Math.max(0, lenPts) + speed;
+      score += gain;
+      updateScore();
+      slotsEl.classList.add("good");
+      flash("+" + gain + (speed >= SPEED_BONUS ? " ⚡" : ""), true);
+      setTimeout(() => { if(running) newWord(); }, 360);
+    } else {
+      shakeSlots();
+      flash("그 단어 아냐", false);
+    }
+  }
+
+  function takeHint(){
+    if(!running) return;
+    if(usedHint){ flash("힌트는 한 번", false); return; }
+    // reveal correct first letter: clear, then place the matching rack tile
+    clearSlots();
+    const want = target[0];
+    for(let i=0;i<rack.length;i++){
+      if(!rack[i].used && rack[i].ch === want){ rack[i].used = true; placed.push(i); break; }
+    }
+    usedHint = true;
+    score = Math.max(0, score - HINT_COST);
+    updateScore();
+    renderRack();
+    renderSlots();
+    flash("−" + HINT_COST, false);
+  }
+
+  function skipWord(){
+    if(!running) return;
+    flash("패스 · " + target.toUpperCase(), false);
+    newWord();
+  }
+
+  // --- feedback ---------------------------------------------------------
+  let flashTimer;
+  function flash(text, good){
+    flashEl.textContent = text;
+    flashEl.style.color = good ? "var(--amber)" : "#e89a7a";
+    flashEl.style.background = good ? "rgba(255,177,84,.16)" : "rgba(232,154,122,.14)";
+    flashEl.classList.add("show");
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => flashEl.classList.remove("show"), 900);
+  }
+
+  function shakeSlots(){
+    slotsEl.querySelectorAll(".tile.placed").forEach(t => {
+      t.classList.remove("shake");
+      void t.offsetWidth;  // reflow to restart animation
+      t.classList.add("shake");
+    });
+  }
+
+  // --- scores / timer ---------------------------------------------------
+  function updateScore(){ scoreEl.textContent = score; }
+
+  function updateTime(){
+    timeEl.textContent = timeLeft;
+    timeEl.classList.toggle("warn", timeLeft <= 10);
+  }
+
+  function tick(){
+    timeLeft--;
+    if(timeLeft <= 0){ timeLeft = 0; updateTime(); endGame(); return; }
+    updateTime();
+  }
+
+  function endGame(){
+    running = false;
+    clearInterval(timerId);
+    const record = score > best;
+    if(record){ best = score; localStorage.setItem(BEST_KEY, String(best)); bestEl.textContent = best; }
+    overMsg.innerHTML = `시간 끝 · 점수 <b>${score}</b>`;
+    overSmall.textContent = record && score > 0
+      ? "최고 기록 경신! 손이 빠르네."
+      : (score === 0 ? "한 단어도 못 풀었다. 다시." : "다시 풀어보자.");
+    overlay.classList.add("show");
+  }
+
+  function start(){
+    score = 0;
+    timeLeft = ROUND_TIME;
+    running = true;
+    target = null;
+    overlay.classList.remove("show");
+    updateScore();
+    updateTime();
+    bestEl.textContent = best;
+    newWord();
+    clearInterval(timerId);
+    timerId = setInterval(tick, 1000);
+  }
+
+  // --- bindings ---------------------------------------------------------
+  document.getElementById("shuffle").addEventListener("click", shuffleRack);
+  document.getElementById("clear").addEventListener("click", clearSlots);
+  document.getElementById("hint").addEventListener("click", takeHint);
+  document.getElementById("skip").addEventListener("click", skipWord);
+  document.getElementById("submit").addEventListener("click", submit);
+  document.getElementById("restart").addEventListener("click", start);
+  document.getElementById("overRestart").addEventListener("click", start);
+
+  window.addEventListener("keydown", e => {
+    if(!running) return;
+    const k = e.key;
+    if(k === "Enter"){ e.preventDefault(); submit(); return; }
+    if(k === "Backspace"){ e.preventDefault(); removeLast(); return; }
+    if(k === "Escape"){ e.preventDefault(); clearSlots(); return; }
+    if(k.length === 1 && /[a-zA-Z]/.test(k)){ e.preventDefault(); typeChar(k.toLowerCase()); }
+  });
+
+  start();
+})();
+</script>
+</body>
+</html>

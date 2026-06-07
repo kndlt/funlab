@@ -82,7 +82,21 @@ Cards, AI opponents, aiming, and arcade survival — whole genres batch 1–2 di
 | 슬롯머신 | 돌리고 멈춘다 — 변동 보상의 중독 | luck ⊗ jackpot |
 
 Strategy games (사목/오델로) run real alpha-beta minimax AI; sudoku puzzles are
-generated with a verified unique solution. Catalog is now **39 games**.
+generated with a verified unique solution.
+
+## Batch 4 — boards, cards, deeper puzzles
+
+| game | essence (one line) | nerve |
+|---|---|---|
+| 솔리테어 / 야찌 | 카드·주사위로 **족보를 완성** | cards (order / combo) |
+| 오목 / 체커 / 만칼라 | AI 상대 보드전 — **잇고·잡고·뿌린다** | strategy (alignment / capture / counting) |
+| 창고지기·러시아워·하노이탑·플러드 | 밀고·빼고·옮기고·물들여 **푼다** | puzzle (planning / extraction / recursion / fill) |
+| 버블슛 | 같은 색 셋을 맞춰 터뜨린다 | aim ⊗ match |
+| 두들점프 | 발판을 밟고 끝없이 위로 | flow ⊗ ascent |
+| 애너그램 | 섞인 글자로 단어를 만든다 | word ⊗ speed |
+
+오목/체커/만칼라 also run real minimax AI; 창고지기/러시아워 use hand-designed,
+verified-solvable levels. Catalog is now **51 games**.
 
 More batches to come — each adds a few essences across the nerve space.
 
