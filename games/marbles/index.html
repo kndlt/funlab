@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>구슬치기 · Marbles</title>
+<style>
+  :root{
+    --bg:#14110d; --panel:#1d1812; --line:#3a3024;
+    --cream:#f6ead8; --ink:#e7dcc8; --muted:#a9977e; --amber:#ffb154;
+  }
+  *{margin:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Apple SD Gothic Neo",ui-rounded,system-ui,sans-serif;
+    background-image:radial-gradient(70% 50% at 80% -10%,rgba(255,178,84,.08),transparent 60%);
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:18px 16px 40px;
+    touch-action:none; -webkit-user-select:none; user-select:none;
+  }
+  .back{position:fixed;top:14px;left:16px;color:var(--muted);text-decoration:none;font-size:13px;z-index:10}
+  .back:hover{color:var(--amber)}
+  .stage{width:100%;max-width:440px;margin-top:30px}
+  .head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:30px;font-weight:800;line-height:1;
+    background:linear-gradient(#fff3df,#ffcf8a);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .title .ref{display:block;font-size:11.5px;color:var(--muted);font-weight:600;margin-top:6px;letter-spacing:.4px}
+  .scores{display:flex;gap:8px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 12px;text-align:center;min-width:58px}
+  .box .lbl{font-size:10.5px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+  .box .val{font-size:21px;font-weight:800;color:var(--cream);font-variant-numeric:tabular-nums}
+  .barline{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px}
+  .hint{font-size:12.5px;color:var(--muted)}
+  .restart{background:linear-gradient(#ffc266,#ff9e3d);color:#3a230a;font-weight:800;border:none;
+    padding:8px 18px;border-radius:22px;font-size:13.5px;cursor:pointer;font-family:inherit}
+  .restart:active{transform:scale(.96)}
+  .board{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    width:100%;aspect-ratio:1/1;touch-action:none;overflow:hidden}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .overlay{position:absolute;inset:0;border-radius:14px;background:rgba(20,17,13,.86);
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:5;
+    text-align:center;padding:20px;animation:fade .25s ease}
+  .overlay.show{display:flex}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .overlay .msg{font-size:22px;font-weight:800;color:var(--cream);line-height:1.5}
+  .overlay .msg b{color:var(--amber)}
+  .overlay .small{font-size:13px;color:var(--muted);max-width:280px}
+  .foot{margin-top:14px;color:#7c6d58;font-size:12px;text-align:center;line-height:1.6}
+</style>
+</head>
+<body>
+<a class="back" href="../../index.html">← funlab</a>
+
+<div class="stage">
+  <div class="head">
+    <div class="title">구슬치기<span class="ref">손가락으로 튕겨 상대 구슬을 맞힌다 · Marbles</span></div>
+    <div class="scores">
+      <div class="box"><div class="lbl">튕김</div><div class="val" id="flicks">0</div></div>
+      <div class="box"><div class="lbl">딴 구슬</div><div class="val" id="won">0</div></div>
+      <div class="box"><div class="lbl">best</div><div class="val" id="best">—</div></div>
+    </div>
+  </div>
+
+  <div class="barline">
+    <div class="hint">내 구슬을 뒤로 당겼다 놓기</div>
+    <button class="restart" id="restart">다시</button>
+  </div>
+
+  <div class="board" id="board">
+    <canvas id="cv"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="msg" id="overMsg"></div>
+      <div class="small" id="overSmall"></div>
+      <button class="restart" id="overRestart">다시</button>
+    </div>
+  </div>
+
+  <div class="foot">적을수록 고수. 한 번 튕길 때 여러 개를 쓸어 담아라.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const BEST_KEY = "funlab:marbles:best";
+  const TARGET_COUNT = 6;
+
+  const boardEl  = document.getElementById("board");
+  const cv       = document.getElementById("cv");
+  const ctx      = cv.getContext("2d");
+  const flicksEl = document.getElementById("flicks");
+  const wonEl    = document.getElementById("won");
+  const bestEl   = document.getElementById("best");
+  const overlay  = document.getElementById("overlay");
+  const overMsg  = document.getElementById("overMsg");
+  const overSmall= document.getElementById("overSmall");
+
+  // glass color sets for target marbles: [base, light, dark]
+  const PALETTE = [
+    ["#6fb6ff", "#cfe9ff", "#2f6fb0"],  // sky
+    ["#ff7a8a", "#ffd0d6", "#b23647"],  // rose
+    ["#7fe0a8", "#d4f6e2", "#2f8f5d"],  // jade
+    ["#c79bff", "#ecdcff", "#7a4fb0"],  // amethyst
+    ["#ffd166", "#fff0c6", "#b08a2f"],  // honey
+    ["#ff9d5c", "#ffe0c6", "#b0612f"],  // ember
+    ["#8fd0d6", "#daf3f6", "#3f8a90"],  // teal
+  ];
+  const PLAYER_COLOR = ["#ffb154", "#ffe6c0", "#b96f1e"];
+
+  // --- sizing (retina + responsive square board) -----------------------
+  let W = 0;                 // device-pixel board size (square)
+  let PR = 0, TR = 0;        // player / target radii (device px)
+  let maxPull = 0, maxLaunch = 0, grabR = 0, stopSpeed = 0;
+  const FRICTION_K = 2.3;    // velocity exp-decay per second
+  const WALL_REST  = 0.72;   // wall bounce energy retained
+  let blotches = [];         // dirt texture, regenerated per size
+
+  function deriveSizes(){
+    PR        = W * 0.041;
+    TR        = W * 0.034;
+    maxPull   = W * 0.40;
+    maxLaunch = W * 2.6;     // device px / second at full power
+    grabR     = W * 0.15;
+    stopSpeed = W * 0.012;
+  }
+
+  function makeBlotches(){
+    blotches = [];
+    const n = 46;
+    for(let i=0;i<n;i++){
+      blotches.push({
+        x: Math.random()*W,
+        y: Math.random()*W,
+        r: W*(0.02 + Math.random()*0.06),
+        a: 0.015 + Math.random()*0.03,
+        warm: Math.random() < 0.5
+      });
+    }
+  }
+
+  function resize(){
+    const rect = boardEl.getBoundingClientRect();
+    const dpr  = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const size = Math.max(1, Math.round(rect.width * dpr));
+    const old  = W;
+    cv.width  = size;
+    cv.height = size;
+    const ratio = old ? size / old : 0;
+    W = size;
+    deriveSizes();
+    if(ratio && player){
+      // keep the game consistent across responsive resizes
+      player.x *= ratio; player.y *= ratio;
+      player.vx *= ratio; player.vy *= ratio;
+      for(const t of targets){ t.x *= ratio; t.y *= ratio; }
+      for(const p of pops){ p.x *= ratio; p.y *= ratio; }
+    }
+    makeBlotches();
+  }
+  window.addEventListener("resize", resize);
+
+  // --- state ------------------------------------------------------------
+  let player;     // {x,y,vx,vy}
+  let targets;    // [{x,y,c:[base,light,dark]}]
+  let pops;       // [{x,y,base,t}]
+  let flicks, won, best;
+  let state;      // 'aim' | 'rolling' | 'clear'
+  let aiming, aimPt;   // aim drag in progress + current pointer point
+  let lastNow;
+
+  best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+
+  function placeTargets(){
+    targets = [];
+    let guard = 0;
+    while(targets.length < TARGET_COUNT && guard < 4000){
+      guard++;
+      const m = W*0.10;
+      const x = m + Math.random()*(W - 2*m);
+      const y = m + Math.random()*(W - 2*m);
+      // keep clear of the player's start
+      if(Math.hypot(x-player.x, y-player.y) < PR + TR + W*0.10) continue;
+      let ok = true;
+      for(const t of targets){
+        if(Math.hypot(x-t.x, y-t.y) < TR*2 + W*0.045){ ok = false; break; }
+      }
+      if(!ok) continue;
+      const c = PALETTE[(Math.random()*PALETTE.length)|0];
+      targets.push({x, y, c});
+    }
+  }
+
+  function init(){
+    resize();
+    player = {x: W*0.5, y: W*0.80, vx:0, vy:0};
+    placeTargets();
+    pops = [];
+    flicks = 0;
+    won = 0;
+    state = "aim";
+    aiming = false;
+    aimPt = null;
+    overlay.classList.remove("show");
+    updateScores();
+    lastNow = performance.now();
+  }
+
+  function updateScores(){
+    flicksEl.textContent = flicks;
+    wonEl.textContent = won;
+    bestEl.textContent = best > 0 ? best : "—";
+  }
+
+  function speed(){ return Math.hypot(player.vx, player.vy); }
+  function settled(){ return speed() === 0; }
+
+  // --- flick (slingshot) ------------------------------------------------
+  function pointerPos(e){
+    const rect = boardEl.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) / rect.width  * cv.width,
+      y: (e.clientY - rect.top)  / rect.height * cv.height
+    };
+  }
+
+  function onDown(e){
+    if(state !== "aim" || !settled()) return;
+    const p = pointerPos(e);
+    if(Math.hypot(p.x-player.x, p.y-player.y) > grabR) return; // must grab the marble
+    aiming = true;
+    aimPt = p;
+    e.preventDefault();
+  }
+  function onMove(e){
+    if(!aiming) return;
+    aimPt = pointerPos(e);
+    e.preventDefault();
+  }
+  function onUp(e){
+    if(!aiming) return;
+    aiming = false;
+    const pull = pullVec();
+    aimPt = null;
+    if(pull.d < W*0.02) return; // too small a tug, no launch
+    const t = Math.min(1, pull.d / maxPull);
+    const sp = t * maxLaunch;
+    // launch OPPOSITE to the pull (slingshot)
+    player.vx = -pull.nx * sp;
+    player.vy = -pull.ny * sp;
+    flicks += 1;
+    state = "rolling";
+    updateScores();
+    e.preventDefault();
+  }
+
+  // current pull vector (from marble toward the pointer), clamped
+  function pullVec(){
+    let dx = aimPt.x - player.x, dy = aimPt.y - player.y;
+    let d = Math.hypot(dx, dy);
+    if(d < 0.0001) return {dx:0, dy:0, d:0, nx:0, ny:0};
+    const cd = Math.min(d, maxPull);
+    const nx = dx/d, ny = dy/d;
+    return {dx:nx*cd, dy:ny*cd, d:cd, nx, ny};
+  }
+
+  // --- physics ----------------------------------------------------------
+  function collect(idx){
+    const t = targets[idx];
+    pops.push({x:t.x, y:t.y, base:t.c[0], t:0});
+    targets.splice(idx, 1);
+    won += 1;
+    updateScores();
+  }
+
+  function physics(dt){
+    // sub-step so a fast marble can't tunnel through walls/targets
+    const sp = speed();
+    const maxMove = sp * dt;
+    let steps = Math.ceil(maxMove / (Math.min(PR, TR) * 0.5));
+    steps = Math.max(1, Math.min(20, steps));
+    const h = dt / steps;
+    const fr = Math.exp(-FRICTION_K * h);
+
+    for(let s=0; s<steps; s++){
+      player.x += player.vx * h;
+      player.y += player.vy * h;
+
+      // walls
+      if(player.x < PR){ player.x = PR; player.vx = Math.abs(player.vx)*WALL_REST; }
+      else if(player.x > W-PR){ player.x = W-PR; player.vx = -Math.abs(player.vx)*WALL_REST; }
+      if(player.y < PR){ player.y = PR; player.vy = Math.abs(player.vy)*WALL_REST; }
+      else if(player.y > W-PR){ player.y = W-PR; player.vy = -Math.abs(player.vy)*WALL_REST; }
+
+      // target hits — elastic transfer of the normal component, then collect
+      for(let i=targets.length-1; i>=0; i--){
+        const t = targets[i];
+        const dx = t.x - player.x, dy = t.y - player.y;
+        const dist = Math.hypot(dx, dy);
+        if(dist <= PR + TR){
+          if(dist > 0.0001){
+            const nx = dx/dist, ny = dy/dist;
+            const vn = player.vx*nx + player.vy*ny; // closing speed along normal
+            if(vn > 0){ player.vx -= vn*nx; player.vy -= vn*ny; }
+          }
+          collect(i);
+        }
+      }
+
+      // friction + stop
+      player.vx *= fr; player.vy *= fr;
+      if(Math.hypot(player.vx, player.vy) < stopSpeed){ player.vx = 0; player.vy = 0; break; }
+    }
+  }
+
+  function settleCheck(){
+    if(state !== "rolling") return;
+    if(!settled()) return;
+    if(targets.length === 0){
+      state = "clear";
+      const record = (best === 0 || flicks < best);
+      if(record){ best = flicks; localStorage.setItem(BEST_KEY, String(best)); updateScores(); }
+      overMsg.innerHTML = `다 땄다 · <b>${flicks}</b>번`;
+      overSmall.textContent = record
+        ? "최소 기록 경신. 손맛 좋네."
+        : `${best}번이면 더 깔끔했다. 다시 줄여봐.`;
+      overlay.classList.add("show");
+    } else {
+      state = "aim"; // next flick from wherever it stopped
+    }
+  }
+
+  // --- rendering --------------------------------------------------------
+  function drawField(){
+    ctx.clearRect(0,0,W,W);
+    // warm dirt base
+    const g = ctx.createRadialGradient(W*0.5, W*0.42, W*0.1, W*0.5, W*0.5, W*0.75);
+    g.addColorStop(0, "#241c12");
+    g.addColorStop(1, "#191309");
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,W);
+    // subtle dirt blotches
+    for(const b of blotches){
+      ctx.fillStyle = b.warm
+        ? `rgba(255,178,84,${b.a})`
+        : `rgba(0,0,0,${b.a*1.6})`;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+      ctx.fill();
+    }
+    // vignette edge
+    ctx.strokeStyle = "rgba(58,48,36,0.6)";
+    ctx.lineWidth = Math.max(1, W*0.006);
+    ctx.strokeRect(ctx.lineWidth/2, ctx.lineWidth/2, W-ctx.lineWidth, W-ctx.lineWidth);
+  }
+
+  function drawMarble(x, y, r, c){
+    // ground shadow
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(x, y + r*0.55, r*0.92, r*0.42, 0, 0, Math.PI*2);
+    ctx.fill();
+    // glass sphere
+    const g = ctx.createRadialGradient(x - r*0.35, y - r*0.40, r*0.10, x, y, r);
+    g.addColorStop(0, c[1]);
+    g.addColorStop(0.45, c[0]);
+    g.addColorStop(1, c[2]);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fill();
+    // rim
+    ctx.strokeStyle = "rgba(0,0,0,0.25)";
+    ctx.lineWidth = Math.max(1, r*0.06);
+    ctx.beginPath();
+    ctx.arc(x, y, r-ctx.lineWidth*0.5, 0, Math.PI*2);
+    ctx.stroke();
+    // glossy highlight
+    ctx.fillStyle = "rgba(255,255,255,0.75)";
+    ctx.beginPath();
+    ctx.ellipse(x - r*0.34, y - r*0.40, r*0.26, r*0.18, -0.5, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  function drawAim(){
+    if(!aiming || !aimPt) return;
+    const pull = pullVec();
+    if(pull.d < 1) return;
+    const t = Math.min(1, pull.d / maxPull);
+
+    // slingshot band: from marble to the pulled-back point
+    const bx = player.x + pull.dx, by = player.y + pull.dy;
+    ctx.strokeStyle = "rgba(169,151,126,0.55)";
+    ctx.lineWidth = Math.max(1, W*0.006);
+    ctx.setLineDash([W*0.012, W*0.012]);
+    ctx.beginPath();
+    ctx.moveTo(player.x, player.y);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // launch direction (opposite the pull): fading dots, more = stronger
+    const dirx = -pull.nx, diry = -pull.ny;
+    const dots = Math.round(3 + t*9);
+    const spacing = PR*1.5;
+    for(let i=1; i<=dots; i++){
+      const dx = player.x + dirx*(PR + i*spacing);
+      const dy = player.y + diry*(PR + i*spacing);
+      if(dx<0||dx>W||dy<0||dy>W) break;
+      const a = 0.9 * (1 - i/(dots+1));
+      const rr = PR*0.30*(1 - i/(dots+2));
+      ctx.fillStyle = `rgba(255,177,84,${a})`;
+      ctx.beginPath();
+      ctx.arc(dx, dy, Math.max(1.2, rr), 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // power ring on the marble
+    ctx.strokeStyle = `rgba(255,177,84,${0.35 + 0.5*t})`;
+    ctx.lineWidth = Math.max(1.5, W*0.010);
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, PR + W*0.02 + t*W*0.02, 0, Math.PI*2);
+    ctx.stroke();
+  }
+
+  function drawPops(){
+    for(let i=pops.length-1; i>=0; i--){
+      const p = pops[i];
+      const k = p.t / 0.42;           // 0..1
+      if(k >= 1){ pops.splice(i,1); continue; }
+      const r = TR * (1 + k*1.6);
+      ctx.strokeStyle = `rgba(255,235,210,${0.7*(1-k)})`;
+      ctx.lineWidth = Math.max(1, TR*0.18*(1-k));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+      ctx.stroke();
+      // little spark
+      ctx.fillStyle = `rgba(255,209,160,${0.6*(1-k)})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, TR*0.4*(1-k), 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  function render(){
+    drawField();
+    for(const t of targets) drawMarble(t.x, t.y, TR, t.c);
+    drawPops();
+    drawMarble(player.x, player.y, PR, PLAYER_COLOR);
+    drawAim();
+  }
+
+  // --- main loop --------------------------------------------------------
+  function frame(now){
+    let dt = (now - lastNow) / 1000;
+    lastNow = now;
+    if(dt > 0.05) dt = 0.05;  // clamp big gaps (tab switches)
+
+    if(state === "rolling") physics(dt);
+    for(const p of pops) p.t += dt;
+    settleCheck();
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  // --- input bindings (pointer = mouse + touch) -------------------------
+  boardEl.addEventListener("pointerdown", e=>{ boardEl.setPointerCapture?.(e.pointerId); onDown(e); });
+  boardEl.addEventListener("pointermove", onMove);
+  boardEl.addEventListener("pointerup", onUp);
+  boardEl.addEventListener("pointercancel", e=>{ aiming = false; aimPt = null; });
+
+  document.getElementById("restart").addEventListener("click", init);
+  document.getElementById("overRestart").addEventListener("click", init);
+
+  init();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
