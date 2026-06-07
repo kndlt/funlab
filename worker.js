@@ -14,9 +14,16 @@ export default {
     const url = new URL(req.url);
     if (url.pathname === '/api/note' && req.method === 'POST') return handleNote(req, env);
     if (url.pathname.startsWith('/api/')) return json({ error: 'not found' }, 404);
-    // anything else: hand back to static assets (run_worker_first is /api/* only,
-    // so we normally aren't even invoked for these — belt and suspenders)
-    return env.ASSETS.fetch(req);
+    // serve the static asset; force revalidation on HTML so rapid iteration
+    // (the games are actively edited) shows up on reload instead of a stale cache.
+    const res = await env.ASSETS.fetch(req);
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('text/html')) {
+      const h = new Headers(res.headers);
+      h.set('Cache-Control', 'no-cache, must-revalidate');
+      return new Response(res.body, { status: res.status, headers: h });
+    }
+    return res;
   },
 };
 
