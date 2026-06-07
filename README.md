@@ -91,12 +91,13 @@ generated with a verified unique solution.
 | 솔리테어 / 야찌 | 카드·주사위로 **족보를 완성** | cards (order / combo) |
 | 오목 / 체커 / 만칼라 | AI 상대 보드전 — **잇고·잡고·뿌린다** | strategy (alignment / capture / counting) |
 | 창고지기·러시아워·하노이탑·플러드 | 밀고·빼고·옮기고·물들여 **푼다** | puzzle (planning / extraction / recursion / fill) |
-| 버블슛 | 같은 색 셋을 맞춰 터뜨린다 | aim ⊗ match |
+| 버블슛 / 구슬치기 | 셋을 맞춰 터뜨린다 / 튕겨서 상대 구슬을 맞힌다 | aim ⊗ match / flick |
 | 두들점프 | 발판을 밟고 끝없이 위로 | flow ⊗ ascent |
 | 애너그램 | 섞인 글자로 단어를 만든다 | word ⊗ speed |
 
 오목/체커/만칼라 also run real minimax AI; 창고지기/러시아워 use hand-designed,
-verified-solvable levels. Catalog is now **51 games**.
+verified-solvable levels. Plus 구슬치기(Marbles), a slingshot-flick aim game.
+Catalog is now **52 games**.
 
 More batches to come — each adds a few essences across the nerve space.
 
