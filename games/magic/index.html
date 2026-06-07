@@ -144,11 +144,11 @@ function strike(x,y,power){
 function emit(e){
   const el=e.el,x=e.x,y=e.y,pw=e.power;
   const axp=e.aim?e.aim.ax*2.6*S:0, ayp=e.aim?e.aim.ay*2.6*S:0;   // aim biases launch direction
-  if(el==='불꽃'){const n=2+Math.round(pw/4);for(let i=0;i<n;i++){const smoke=Math.random()<.12;add({el,kind:smoke?'smoke':'fire',x:x+rnd(-7,7)*S,y:y+rnd(-3,3)*S,vx:rnd(-.4,.4)*S+axp,vy:-rnd(.8,2.0)*S+ayp,life:smoke?rnd(40,70):rnd(26,52),max:smoke?70:52,r:rnd(5,10)*S});}}
-  else if(el==='물결'){const n=3+Math.round(pw/3);for(let i=0;i<n;i++)add({el,kind:'drop',x:x+rnd(-6,6)*S,y,vx:rnd(-2.4,2.4)*S+axp,vy:-rnd(2,4.2)*S+ayp,life:200,max:200,r:rnd(2.5,4.5)*S});}
-  else if(el==='바람'){const n=2+Math.round(pw/4);for(let i=0;i<n;i++){const a=rnd(0,6.28),rad=rnd(6,40)*S;add({el,kind:'wind',x:x+Math.cos(a)*rad,y:y+Math.sin(a)*rad,vx:-Math.sin(a)*rnd(2,4)*S+axp*1.4,vy:Math.cos(a)*rnd(2,4)*S+ayp*1.4,life:rnd(22,42),max:42,r:rnd(8,18)*S});}}
-  else if(el==='바위'){const n=2+Math.round(pw/3);for(let i=0;i<n;i++)add({el,kind:'rock',x:x+rnd(-8,8)*S,y:y+rnd(-6,6)*S,vx:rnd(-2.4,2.4)*S+axp,vy:-rnd(2,4.5)*S+ayp,life:600,max:600,r:rnd(4,9)*S,rot:rnd(0,6.28),vr:rnd(-.2,.2),sh:rnd(.7,1),verts:rockVerts()});}
-  else if(el==='빛'){const n=2+Math.round(pw/4);for(let i=0;i<n;i++){const a=rnd(0,6.28),sp=rnd(.4,1.6)*S;add({el,kind:'mote',x:x+rnd(-6,6)*S,y:y+rnd(-6,6)*S,vx:Math.cos(a)*sp+axp*.4,vy:Math.sin(a)*sp-.3*S+ayp*.4,life:rnd(60,110),max:110,r:rnd(2.5,6)*S});}}
+  if(el==='불꽃'){const n=2+Math.round(pw/4);for(let i=0;i<n;i++){const smoke=Math.random()<.12;add({el,kind:smoke?'smoke':'fire',x:x+rnd(-7,7)*S,y:y+rnd(-3,3)*S,vx:rnd(-.7,.7)*S+axp,vy:-rnd(1.6,3.6)*S+ayp,life:smoke?rnd(34,60):rnd(20,40),max:smoke?60:40,r:rnd(5,10)*S});}}
+  else if(el==='물결'){const n=3+Math.round(pw/3);for(let i=0;i<n;i++)add({el,kind:'drop',x:x+rnd(-6,6)*S,y,vx:rnd(-3.4,3.4)*S+axp,vy:-rnd(3.4,6)*S+ayp,life:200,max:200,r:rnd(2.5,4.5)*S});}
+  else if(el==='바람'){const n=2+Math.round(pw/4);for(let i=0;i<n;i++){const a=rnd(0,6.28),rad=rnd(6,40)*S;add({el,kind:'wind',x:x+Math.cos(a)*rad,y:y+Math.sin(a)*rad,vx:-Math.sin(a)*rnd(4,7)*S+axp*1.6,vy:Math.cos(a)*rnd(4,7)*S+ayp*1.6,life:rnd(20,38),max:38,r:rnd(8,18)*S});}}
+  else if(el==='바위'){const n=2+Math.round(pw/3);for(let i=0;i<n;i++)add({el,kind:'rock',x:x+rnd(-8,8)*S,y:y+rnd(-6,6)*S,vx:rnd(-3.4,3.4)*S+axp,vy:-rnd(3.2,6.5)*S+ayp,life:600,max:600,r:rnd(4,9)*S,rot:rnd(0,6.28),vr:rnd(-.3,.3),sh:rnd(.7,1),verts:rockVerts()});}
+  else if(el==='빛'){const n=2+Math.round(pw/4);for(let i=0;i<n;i++){const a=rnd(0,6.28),sp=rnd(1.2,3.4)*S;add({el,kind:'mote',x:x+rnd(-6,6)*S,y:y+rnd(-6,6)*S,vx:Math.cos(a)*sp+axp*.5,vy:Math.sin(a)*sp-.3*S+ayp*.5,life:rnd(50,95),max:95,r:rnd(2.5,6)*S});}}
 }
 function rockVerts(){const v=[],k=6+(Math.random()*3|0);for(let i=0;i<k;i++){const a=i/k*6.28;const rr=rnd(.6,1);v.push([Math.cos(a)*rr,Math.sin(a)*rr]);}return v;}
 
@@ -180,13 +180,13 @@ function step(){
   for(let i=P.length-1;i>=0;i--){
     const p=P[i];
     for(const g of G){const dx=p.x-g.x,dy=p.y-g.y;if(dx*dx+dy*dy<g.r*g.r){p.vx+=g.fx;p.vy+=g.fy;}}
-    if(p.kind==='fire'){p.vy-=.03*S;p.vx+=rnd(-.18,.18)*S;p.vx*=.98;p.r*=.992;}
-    else if(p.kind==='smoke'){p.vy-=.02*S;p.vx+=rnd(-.12,.12)*S;p.r*=1.004;}
-    else if(p.kind==='drop'){p.vy+=.2*S;}
-    else if(p.kind==='wind'){p.vx*=.94;p.vy*=.94;p.r*=1.01;}
-    else if(p.kind==='rock'){p.vy+=.24*S;p.vx*=.99;p.rot+=p.vr;}
-    else if(p.kind==='mote'){p.vx*=.98;p.vy=p.vy*.98-.2*S;}
-    else if(p.kind==='spark'){p.vy+=.18*S;}
+    if(p.kind==='fire'){p.vy-=.07*S;p.vx+=rnd(-.22,.22)*S;p.vx*=.985;p.r*=.99;}
+    else if(p.kind==='smoke'){p.vy-=.045*S;p.vx+=rnd(-.14,.14)*S;p.r*=1.005;}
+    else if(p.kind==='drop'){p.vy+=.32*S;}
+    else if(p.kind==='wind'){p.vx*=.965;p.vy*=.965;p.r*=1.01;}
+    else if(p.kind==='rock'){p.vy+=.36*S;p.vx*=.99;p.rot+=p.vr;}
+    else if(p.kind==='mote'){p.vx*=.985;p.vy=p.vy*.985-.28*S;}
+    else if(p.kind==='spark'){p.vy+=.28*S;}
     p.x+=p.vx;p.y+=p.vy;p.life--;
     if(p.kind==='drop'&&p.y>=FLOOR){ // splash → feed nearest puddle
       BOLT.push({kind:'splash',x:p.x,y:FLOOR,r:2*S,rr:rnd(6,12)*S,life:10,max:10});
@@ -218,13 +218,13 @@ function draw(){
   // particles
   for(const p of P){
     const a=Math.max(0,Math.min(1,p.life/p.max));
-    if(p.kind==='fire'){const t=1-p.life/p.max;const hue=50-t*44,li=62-t*22;ctx.globalAlpha=a*.4;ctx.shadowColor=`hsl(${hue},95%,55%)`;ctx.shadowBlur=14*S;ctx.fillStyle=`hsl(${hue},95%,${li}%)`;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,6.28);ctx.fill();ctx.shadowBlur=0;ctx.globalAlpha=a;ctx.fillStyle=`hsl(${Math.min(55,hue+10)},100%,${li+14}%)`;ctx.beginPath();ctx.arc(p.x,p.y,p.r*.5,0,6.28);ctx.fill();}
+    if(p.kind==='fire'){const t=1-p.life/p.max;const hue=50-t*44,li=62-t*22;ctx.globalAlpha=a*.3;ctx.fillStyle=`hsl(${hue},95%,${li}%)`;ctx.beginPath();ctx.arc(p.x,p.y,p.r*1.5,0,6.28);ctx.fill();ctx.globalAlpha=a;ctx.fillStyle=`hsl(${Math.min(55,hue+10)},100%,${li+16}%)`;ctx.beginPath();ctx.arc(p.x,p.y,p.r*.6,0,6.28);ctx.fill();}
     else if(p.kind==='smoke'){ctx.globalAlpha=a*(p.steam?.5:.28);ctx.fillStyle=p.steam?'#dfe2e6':'#7d756c';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,6.28);ctx.fill();}
     else if(p.kind==='drop'){ctx.globalAlpha=a;ctx.fillStyle='#2f86c8';const sp=Math.hypot(p.vx,p.vy),ang=Math.atan2(p.vy,p.vx);ctx.save();ctx.translate(p.x,p.y);ctx.rotate(ang);ctx.beginPath();ctx.ellipse(0,0,p.r*(1+sp*.05),p.r*.7,0,0,6.28);ctx.fill();ctx.restore();ctx.globalAlpha=a*.7;ctx.fillStyle='#cdebff';ctx.beginPath();ctx.arc(p.x-p.r*.2,p.y-p.r*.2,p.r*.3,0,6.28);ctx.fill();}
     else if(p.kind==='wind'){ctx.globalAlpha=a*.32;ctx.strokeStyle='#ffffff';ctx.lineWidth=Math.max(1,p.r*.16);ctx.beginPath();ctx.arc(p.x,p.y,p.r,Math.atan2(p.vy,p.vx),Math.atan2(p.vy,p.vx)+1.6);ctx.stroke();}
     else if(p.kind==='rock'){drawRock(p.x,p.y,p.r,p.rot,p.sh,p.verts,a);}
-    else if(p.kind==='mote'){ctx.globalAlpha=a*.4;ctx.shadowColor='#ffd86a';ctx.shadowBlur=10*S;ctx.fillStyle='#ffe39a';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,6.28);ctx.fill();ctx.shadowBlur=0;ctx.globalAlpha=a;ctx.fillStyle='#fff6d8';ctx.beginPath();ctx.arc(p.x,p.y,p.r*.5,0,6.28);ctx.fill();}
-    else if(p.kind==='spark'){ctx.globalAlpha=a;ctx.shadowColor='#b9a8ff';ctx.shadowBlur=8*S;ctx.fillStyle='#e7e0ff';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,6.28);ctx.fill();ctx.shadowBlur=0;}
+    else if(p.kind==='mote'){ctx.globalAlpha=a*.35;ctx.fillStyle='#ffdf8a';ctx.beginPath();ctx.arc(p.x,p.y,p.r*1.7,0,6.28);ctx.fill();ctx.globalAlpha=a;ctx.fillStyle='#fff6d8';ctx.beginPath();ctx.arc(p.x,p.y,p.r*.6,0,6.28);ctx.fill();}
+    else if(p.kind==='spark'){ctx.globalAlpha=a*.4;ctx.fillStyle='#b9a8ff';ctx.beginPath();ctx.arc(p.x,p.y,p.r*1.8,0,6.28);ctx.fill();ctx.globalAlpha=a;ctx.fillStyle='#f0ecff';ctx.beginPath();ctx.arc(p.x,p.y,p.r*.7,0,6.28);ctx.fill();}
   }
   ctx.globalAlpha=1;
 
